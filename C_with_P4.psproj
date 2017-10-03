@@ -283,7 +283,7 @@
                         "elf_64": true, 
                         "fill": "default", 
                         "fill_enable": false, 
-                        "gen_mem_map_file": false, 
+                        "gen_mem_map_file": true, 
                         "gen_seg_h_file": false, 
                         "insert_nffwmip": true, 
                         "insert_rt_syms": true, 
@@ -291,7 +291,7 @@
                             "i8": "catamaran", 
                             "i9": "catamaran"
                         }, 
-                        "map_file": ".\\C_with_P4_", 
+                        "map_file": ".\\C_with_P4_.map", 
                         "memories": {}, 
                         "nn_chains": {}, 
                         "produce_u_cstore_ecc": false, 
