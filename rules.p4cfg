@@ -1,0 +1,25 @@
+{
+    "tables": {
+        "tbl_drop_non_udp": {
+            "default_rule": {
+                "action": {
+                    "type": "act_drop"
+                }, 
+                "name": "drop"
+            }
+        }, 
+        "tbl_forward_udp": {
+            "default_rule": {
+                "action": {
+                    "data": {
+                        "port": {
+                            "value": "v0.1"
+                        }
+                    }, 
+                    "type": "act_modify_and_send"
+                }, 
+                "name": "modify_and_send"
+            }
+        }
+    }
+}
