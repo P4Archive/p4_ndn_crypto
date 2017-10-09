@@ -99,6 +99,7 @@
                         "gro_enabled": true, 
                         "implicit_header_valid": true, 
                         "include_paths": [], 
+                        "mac_ingress_timestamp": false, 
                         "mc_init": false, 
                         "multicast_group_count": 16, 
                         "multicast_group_size": 16, 
@@ -170,6 +171,9 @@
                         "i34.tg4": [
                             "pif_app_nfd.list"
                         ], 
+                        "i34.tg5": [
+                            "pif_app_nfd.list"
+                        ], 
                         "i35.tg0": [
                             "pif_app_nfd.list"
                         ], 
@@ -237,9 +241,6 @@
                             "pif_app_nfd.list"
                         ], 
                         "i38.tg4": [
-                            "pif_app_nfd.list"
-                        ], 
-                        "i38.tg5": [
                             "pif_app_nfd.list"
                         ], 
                         "i4.me0": [
@@ -311,6 +312,7 @@
                         "c_source_files": [
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\apps\\pif_app_nfd\\src\\app_master.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\pif_init.c", 
+                            "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\mac_time.c", 
                             ".\\out\\pif_digests.c", 
                             ".\\out\\pif_parrep_pvs_sync.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\apps\\common\\src\\mac_flush.c", 
@@ -1139,6 +1141,7 @@
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\apps\\common\\src\\system_init.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\apps\\common\\src\\pif_pkt_mod_script.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\apps\\common\\src\\fc.c", 
+                            "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\mac_time_user.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\pif_action_common.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\pif_meter.c", 
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\pif_lookup.c", 
@@ -1474,6 +1477,12 @@
                 "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\hashmap\\src\\camp_hash.c": {
                     "update": "YES"
                 }, 
+                "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\mac_time.c": {
+                    "update": "YES"
+                }, 
+                "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\mac_time_user.c": {
+                    "update": "YES"
+                }, 
                 "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\lib\\pif\\src\\pif_action_common.c": {
                     "update": "YES"
                 }, 
@@ -1592,7 +1601,7 @@
         "legacy_mode": false, 
         "managed_c_project": false, 
         "p4_version": "1.0", 
-        "pif_gen_version": "1.7.2-003172447ed", 
+        "pif_gen_version": "1.8.0-93a63499f7b", 
         "pkt_strm_config": {
             "nbi": {
                 "0": {
@@ -1606,7 +1615,7 @@
             }
         }, 
         "project_name": "C_with_P4", 
-        "project_path": "C:\\Users\\antosikm\\NFP_SDK\\C_with_P4\\C_with_P4.psproj", 
+        "project_path": "C:\\Users\\zuraniewskipw\\NFP_SDK\\netronome_crypto\\C_with_P4.psproj", 
         "sim_startup_options": {
             "imported_var_data_file": "", 
             "sim_profile_started": true, 

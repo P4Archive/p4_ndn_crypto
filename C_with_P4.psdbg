@@ -1,7 +1,7 @@
 {
     "ProjectDebugOptions": {
         "#Info": {
-            "DebugConfiguration": "SIMULATION", 
+            "DebugConfiguration": "HARDWARE", 
             "ProjectName": "C_with_P4", 
             "SimPerfStatsFilePath": "", 
             "Title": "Programmer Studio Debug Options File"
@@ -18,36 +18,70 @@
         "CreditTrackerWatches": {}, 
         "CustomOptions": {
             "ProjectWorkspace": {
-                "Options": [], 
+                "Options": [
+                    "[WorkState_v1_2]", 
+                    "ptn_Child1=Frames", 
+                    "[WorkState_v1_2.Frames]", 
+                    "ptn_Child1=ChildFrames", 
+                    "[WorkState_v1_2.Frames.ChildFrames]", 
+                    "ptn_Child1=Document-0", 
+                    "ptn_Child2=Document-1", 
+                    "[WorkState_v1_2.Frames.ChildFrames.Document-0]", 
+                    "ptn_Child1=ViewFrame-0", 
+                    "[WorkState_v1_2.Frames.ChildFrames.Document-0.ViewFrame-0]", 
+                    "DocPathName=C:\\Users\\zuraniewskipw\\NFP_SDK\\netronome_crypto\\main.p4", 
+                    "DocumentString=P4SRC", 
+                    "DocTemplateIndex=0", 
+                    "WindowPlacement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPCIAAAAAACIAAAAAAIBFAAAAAPFCAAAAA", 
+                    "IsActiveChildFrame=False", 
+                    "IsFrameVisible=True", 
+                    "[WorkState_v1_2.Frames.ChildFrames.Document-1]", 
+                    "ptn_Child1=ViewFrame-0", 
+                    "[WorkState_v1_2.Frames.ChildFrames.Document-1.ViewFrame-0]", 
+                    "DocPathName=C:\\Users\\zuraniewskipw\\NFP_SDK\\netronome_crypto\\actions.c", 
+                    "DocumentString=P4SANDBOXCSRC", 
+                    "DocTemplateIndex=0", 
+                    "WindowPlacement=MCAAAAAACAAAAAAADAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPIGAAAAAAIGAAAAAAKPEAAAAABECAAAAA", 
+                    "IsActiveChildFrame=True", 
+                    "IsFrameVisible=True"
+                ], 
                 "Type": 4
             }, 
             "ThreadWindowWorkspace": {
-                "Options": [], 
+                "Options": [
+                    "[WorkState_v1_2]", 
+                    "ptn_Child1=Frames", 
+                    "ptn_Child2=ThreadWindows", 
+                    "[WorkState_v1_2.ThreadWindows]", 
+                    "ptn_Child1=ThreadWindow0", 
+                    "ptn_Child2=ThreadWindow1", 
+                    "ptn_Child3=ThreadWindow2", 
+                    "ptn_Child4=ThreadWindow3", 
+                    "[WorkState_v1_2.ThreadWindows.ThreadWindow0]", 
+                    "ThreadName=Thread0///", 
+                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPIGAAAAAAIGAAAAAAKIDAAAAAHOBAAAAA", 
+                    "TrackActiveThread=False", 
+                    "ShowListView=False", 
+                    "[WorkState_v1_2.ThreadWindows.ThreadWindow1]", 
+                    "ThreadName=Thread4///", 
+                    "Placement=MCAAAAAACAAAAAAADAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPCIAAAAAACIAAAAAAEKDAAAAABACAAAAA", 
+                    "TrackActiveThread=False", 
+                    "ShowListView=False", 
+                    "[WorkState_v1_2.ThreadWindows.ThreadWindow2]", 
+                    "ThreadName=Thread0///", 
+                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPMJAAAAAAMJAAAAAAOLDAAAAALBCAAAAA", 
+                    "TrackActiveThread=False", 
+                    "ShowListView=False", 
+                    "[WorkState_v1_2.ThreadWindows.ThreadWindow3]", 
+                    "ThreadName=Thread0///", 
+                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPAAAAAAAAAAAAAAAACCDAAAAAPHBAAAAA", 
+                    "TrackActiveThread=False", 
+                    "ShowListView=False"
+                ], 
                 "Type": 5
             }
         }, 
-        "DataWatches": {
-            "2147483653": {
-                "Breakpoints": {}, 
-                "ExpandedWatchItem": false, 
-                "MicroEngine": {
-                    "ChipName": "", 
-                    "MicroEngineNumber": "i32.me0"
-                }, 
-                "TypeVariable": false, 
-                "WatchName": "local_mem[0:4095]"
-            }, 
-            "2147483656": {
-                "Breakpoints": {}, 
-                "ExpandedWatchItem": false, 
-                "MicroEngine": {
-                    "ChipName": "", 
-                    "MicroEngineNumber": "i32.me1"
-                }, 
-                "TypeVariable": false, 
-                "WatchName": "local_mem[0:4095]"
-            }
-        }, 
+        "DataWatches": {}, 
         "ForeignModelOptions": {}, 
         "HardwareConfiguration": {
             "": {
@@ -1195,7 +1229,7 @@
                                     "ReferencesDisplayed": true
                                 }, 
                                 "4": {
-                                    "ContextInview": false, 
+                                    "ContextInview": true, 
                                     "Displayed": true, 
                                     "LabelsDisplayed": false, 
                                     "ReferencesDisplayed": true
@@ -2727,7 +2761,12 @@
                                     "ReferencesDisplayed": true
                                 }
                             }, 
-                            "MicroEngineSliceHistory": {}
+                            "MicroEngineSliceHistory": {
+                                "pif_app_nfd.list": {
+                                    "DisplayCollapsed": true, 
+                                    "HistoryLabels": []
+                                }
+                            }
                         }, 
                         "i34.me11": {
                             "MicroEngineContexts": {
@@ -2780,7 +2819,12 @@
                                     "ReferencesDisplayed": true
                                 }
                             }, 
-                            "MicroEngineSliceHistory": {}
+                            "MicroEngineSliceHistory": {
+                                "pif_app_nfd.list": {
+                                    "DisplayCollapsed": true, 
+                                    "HistoryLabels": []
+                                }
+                            }
                         }, 
                         "i34.me2": {
                             "MicroEngineContexts": {
@@ -5496,12 +5540,7 @@
                                     "ReferencesDisplayed": true
                                 }
                             }, 
-                            "MicroEngineSliceHistory": {
-                                "pif_app_nfd.list": {
-                                    "DisplayCollapsed": true, 
-                                    "HistoryLabels": []
-                                }
-                            }
+                            "MicroEngineSliceHistory": {}
                         }, 
                         "i38.me11": {
                             "MicroEngineContexts": {
@@ -5554,12 +5593,7 @@
                                     "ReferencesDisplayed": true
                                 }
                             }, 
-                            "MicroEngineSliceHistory": {
-                                "pif_app_nfd.list": {
-                                    "DisplayCollapsed": true, 
-                                    "HistoryLabels": []
-                                }
-                            }
+                            "MicroEngineSliceHistory": {}
                         }, 
                         "i38.me2": {
                             "MicroEngineContexts": {
@@ -6943,26 +6977,8 @@
             {
                 "BreakpointSourceLocations": [
                     {
-                        "BptSourceFileLine": 643, 
-                        "BptSourceFileLocation": ".\\actions.c"
-                    }
-                ], 
-                "Enabled": false, 
-                "EngineSliceName": "pif_app_nfd.list", 
-                "MicroEngine": {
-                    "ChipName": "", 
-                    "MicroEngineNumber": "i32.me0"
-                }, 
-                "P4Breakpoint": false, 
-                "P4ShadowBreakpoint": false, 
-                "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483740
-            }, 
-            {
-                "BreakpointSourceLocations": [
-                    {
-                        "BptSourceFileLine": 635, 
-                        "BptSourceFileLocation": ".\\actions.c"
+                        "BptSourceFileLine": 82, 
+                        "BptSourceFileLocation": ".\\main.p4"
                     }
                 ], 
                 "Enabled": true, 
@@ -6971,16 +6987,16 @@
                     "ChipName": "", 
                     "MicroEngineNumber": "i32.me0"
                 }, 
-                "P4Breakpoint": false, 
+                "P4Breakpoint": true, 
                 "P4ShadowBreakpoint": false, 
                 "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483742
+                "UniqueBreakpointID": 2147483848
             }, 
             {
                 "BreakpointSourceLocations": [
                     {
-                        "BptSourceFileLine": 660, 
-                        "BptSourceFileLocation": ".\\actions.c"
+                        "BptSourceFileLine": 17, 
+                        "BptSourceFileLocation": ".\\out\\pif_ctlflow.c"
                     }
                 ], 
                 "Enabled": true, 
@@ -6990,50 +7006,50 @@
                     "MicroEngineNumber": "i32.me0"
                 }, 
                 "P4Breakpoint": false, 
-                "P4ShadowBreakpoint": false, 
+                "P4ShadowBreakpoint": true, 
                 "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483744
+                "UniqueBreakpointID": 2147483850
             }, 
             {
                 "BreakpointSourceLocations": [
                     {
-                        "BptSourceFileLine": 635, 
-                        "BptSourceFileLocation": ".\\actions.c"
+                        "BptSourceFileLine": 67, 
+                        "BptSourceFileLocation": ".\\main.p4"
                     }
                 ], 
-                "Enabled": false, 
+                "Enabled": true, 
                 "EngineSliceName": "pif_app_nfd.list", 
                 "MicroEngine": {
                     "ChipName": "", 
-                    "MicroEngineNumber": "i36.me0"
+                    "MicroEngineNumber": "i32.me0"
                 }, 
-                "P4Breakpoint": false, 
+                "P4Breakpoint": true, 
                 "P4ShadowBreakpoint": false, 
                 "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483752
+                "UniqueBreakpointID": 2147483880
             }, 
             {
                 "BreakpointSourceLocations": [
                     {
-                        "BptSourceFileLine": 660, 
-                        "BptSourceFileLocation": ".\\actions.c"
+                        "BptSourceFileLine": 50, 
+                        "BptSourceFileLocation": ".\\out\\pif_actions.c"
                     }
                 ], 
-                "Enabled": false, 
+                "Enabled": true, 
                 "EngineSliceName": "pif_app_nfd.list", 
                 "MicroEngine": {
                     "ChipName": "", 
-                    "MicroEngineNumber": "i36.me0"
+                    "MicroEngineNumber": "i32.me0"
                 }, 
                 "P4Breakpoint": false, 
-                "P4ShadowBreakpoint": false, 
+                "P4ShadowBreakpoint": true, 
                 "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483756
+                "UniqueBreakpointID": 2147483882
             }, 
             {
                 "BreakpointSourceLocations": [
                     {
-                        "BptSourceFileLine": 635, 
+                        "BptSourceFileLine": 698, 
                         "BptSourceFileLocation": ".\\actions.c"
                     }
                 ], 
@@ -7041,30 +7057,12 @@
                 "EngineSliceName": "pif_app_nfd.list", 
                 "MicroEngine": {
                     "ChipName": "", 
-                    "MicroEngineNumber": "i33.me0"
+                    "MicroEngineNumber": "i32.me0"
                 }, 
                 "P4Breakpoint": false, 
                 "P4ShadowBreakpoint": false, 
                 "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483758
-            }, 
-            {
-                "BreakpointSourceLocations": [
-                    {
-                        "BptSourceFileLine": 660, 
-                        "BptSourceFileLocation": ".\\actions.c"
-                    }
-                ], 
-                "Enabled": true, 
-                "EngineSliceName": "pif_app_nfd.list", 
-                "MicroEngine": {
-                    "ChipName": "", 
-                    "MicroEngineNumber": "i33.me0"
-                }, 
-                "P4Breakpoint": false, 
-                "P4ShadowBreakpoint": false, 
-                "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483762
+                "UniqueBreakpointID": 2147483922
             }
         ], 
         "MemoryWatches": {
@@ -7075,20 +7073,27 @@
                 "NumberSubElements": 256, 
                 "UniqueWatchID": 2147483650
             }, 
-            "i32.ctm[131072:131587]": {
+            "i32.ctm[131072:133075]": {
                 "Breakpoints": {}, 
                 "ChipName": "", 
                 "ExpandedWatchItem": false, 
-                "NumberSubElements": 129, 
-                "UniqueWatchID": 2147483660
+                "NumberSubElements": 501, 
+                "UniqueWatchID": 2147483661
+            }, 
+            "i32.ctm[132576:132587]": {
+                "Breakpoints": {}, 
+                "ChipName": "", 
+                "ExpandedWatchItem": false, 
+                "NumberSubElements": 3, 
+                "UniqueWatchID": 2147483662
             }
         }, 
         "NBIPMModPipelines": {
             "8": {
-                "UniqueWatchID": 2147483778
+                "UniqueWatchID": 2147483766
             }, 
             "9": {
-                "UniqueWatchID": 2147483778
+                "UniqueWatchID": 2147483766
             }
         }, 
         "RunControlOptions": {}, 
@@ -7113,8 +7118,8 @@
         }, 
         "UniqueIDs": {
             "NextUniqueBreakpointGroupId": "0x80000000", 
-            "NextUniqueBreakpointId": "0x80000084", 
-            "NextUniqueWatchId": "0x8000000d"
+            "NextUniqueBreakpointId": "0x80000128", 
+            "NextUniqueWatchId": "0x8000001d"
         }, 
         "WatchScriptsExeData": {}
     }

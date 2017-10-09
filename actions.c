@@ -30,8 +30,9 @@ volatile __export __mem uint32_t search_mu_detections = 0;
 
 volatile __export __mem uint32_t pif_mu_len = 0;
 
+static __export __ctm uint32_t count;
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
-static __export __ctm uint8_t buf[64];
+static __export __ctm uint8_t buf[1500];
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
 static __export __ctm uint8_t plain_text[64] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
                     0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
@@ -616,11 +617,14 @@ void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
                             MATCH_DATA_T *match_data)
 {
-    __mem uint8_t *payload;
+    __mem uint8_t *payload; 
     __xread uint32_t pl_data[CHUNK_LW];
     __lmem uint32_t pl_mem[CHUNK_LW];
     int search_progress = 0;
-    int i, count, to_read;
+    int i,to_read;
+    int j=0;
+
+    //int count; //now global
     uint32_t mu_len, ctm_len;
     //__declspec(local_mem) uint8_t buf[64];
     //__declspec(ctm export scope(island)) uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
@@ -631,6 +635,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
                     //0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
 
     /* figure out how much data is in external memory vs ctm */
+
+    for (i=0; i<1500; i++)
+        buf[i]=222;
 
 
     if (pif_pkt_info_global.split) { /* payload split to MU */
@@ -657,8 +664,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         iv[i] = iv[i]+7;
     }*/
 
-    AES_CBC_encrypt_buffer((uint8_t*)buf, (uint8_t*)plain_text,64, (uint8_t*)key,(uint8_t*)iv);
-    return PIF_PLUGIN_RETURN_DROP;
+
+
+    //AES_CBC_encrypt_buffer((uint8_t*)buf, (uint8_t*)plain_text,64, (uint8_t*)key,(uint8_t*)iv);
 
     while (count) {
         /* grab a maximum of chunk */
@@ -671,31 +679,24 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
          * we can iterate over local memory, where transfer
          * registers we cant
          */
-        for (i = 0; i < CHUNK_LW; i++)
-            pl_mem[i] = pl_data[i];
+         for (i = 0; i < CHUNK_LW; i++)
+                pl_mem[i] = pl_data[i];
 
-        /* iterate over all the bytes and do the search */
-        for (i = 0; i < to_read; i++) {
-            uint8_t val = pl_mem[i/4] >> (8 * (3 - (i % 4)));
-            
+         for (i = 0; i < to_read; i++) {
+              buf[j++] = pl_mem[i/4] >> (8 * (3 - (i % 4)));
+         }
 
-            if (val == search_string[search_progress])
-                search_progress += 1;
-            else
-                search_progress = 0;
 
-            if (search_progress >= sizeof(search_string)) {
-                mem_incr32((__mem uint32_t *)&search_detections);
-                mem_incr32((__mem uint32_t *)&search_ctm_detections);
+        if (j>=sizeof(buf))
+                return PIF_PLUGIN_RETURN_DROP;
+        
 
-                /* drop if found */
-                return PIF_PLUGIN_RETURN_FORWARD;
-            }
-        }
 
         payload += to_read;
         count -= to_read;
     }
+
+    return PIF_PLUGIN_RETURN_FORWARD;
 
     /* same as above, but for mu. Code duplicated as a manual unroll */
     if (mu_len) {
@@ -714,32 +715,23 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
              * we can iterate over local memory, where transfer
              * registers we cant
              */
-            for (i = 0; i < CHUNK_LW; i++)
-                pl_mem[i] = pl_data[i];
 
-            /* iterate over all the bytes and do the search */
-            for (i = 0; i < to_read; i++) {
-                uint8_t val = pl_mem[i/4] >> (8 * (3 - (i % 4)));
+             for (i = 0; i < CHUNK_LW; i++)
+                   pl_mem[i] = pl_data[i];
 
-                if (val == search_string[search_progress])
-                    search_progress += 1;
-                else
-                    search_progress = 0;
+             for (i = 0; i < to_read; i++) {
+                   buf[j++] = pl_mem[i/4] >> (8 * (3 - (i % 4)));
+             }
 
-                if (search_progress >= sizeof(search_string)) {
-                    mem_incr32((__mem uint32_t *)&search_detections);
-                    mem_incr32((__mem uint32_t *)&search_mu_detections);
-
-                    /* drop if found */
-                    return PIF_PLUGIN_RETURN_FORWARD;
-                }
-            }
+            if (j>=sizeof(buf))
+                return PIF_PLUGIN_RETURN_DROP;
 
             payload += to_read;
             count -= to_read;
         }
     }
 
-    return PIF_PLUGIN_RETURN_DROP;
+
+    return PIF_PLUGIN_RETURN_FORWARD;
 }
 

@@ -82,7 +82,8 @@ action act_modify_and_send(port){
 
 table tbl_forward_udp {
   reads {
-    udp.dstPort : exact ;
+    //udp.dstPort : exact ;
+    standard_metadata.ingress_port : exact;
   }
   actions {
     act_modify_and_send;
