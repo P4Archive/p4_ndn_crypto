@@ -1,3 +1,7 @@
+#define ETHERTYPE_IPV4 0x0800
+#define IPPROTO_UDP 17
+
+
 header_type ethernet_t {
   fields {
     dstAddr   : 48;
@@ -39,7 +43,7 @@ header udp_t udp;
 parser parse_ethernet {
   extract(ethernet);
   return select(latest.etherType) {
-    0x800:    parse_ipv4;
+    ETHERTYPE_IPV4:    parse_ipv4;
     default:  ingress;
   }
 }
@@ -47,7 +51,7 @@ parser parse_ethernet {
 parser parse_ipv4 {
   extract(ipv4);
   return select(latest.protocol) {
-    0x11:     parse_udp;
+    IPPROTO_UDP:     parse_udp;
     default:  ingress;
   }
 }
@@ -65,13 +69,8 @@ parser start {
 
 primitive_action payload_scan();
 
-action act_drop()
-{
+action act_drop(){
   drop();
-}
-
-action act_send_to_default(port) {
-  modify_field (standard_metadata.egress_spec, port);
 }
 
 
@@ -80,35 +79,33 @@ action act_modify_and_send(port){
   modify_field (standard_metadata.egress_spec, port);
 }
 
+action act_do_forward(espec) {
+    modify_field(standard_metadata.egress_spec, espec);
+}
+
 table tbl_forward_udp {
-  reads {
-    //udp.dstPort : exact ;
-    standard_metadata.ingress_port : exact;
-  }
   actions {
     act_modify_and_send;
-    act_send_to_default;
-    act_drop;
   }
 }
 
-table tbl_drop_non_udp {
-  reads {
-    udp.dstPort : exact ;
-  }
-  actions {
-    act_modify_and_send;
-    act_send_to_default;
-    act_drop;
-  }
+table tbl_drop {
+    reads {
+        standard_metadata.ingress_port : exact;
+    }
+
+    actions {
+		act_drop;
+    }
 }
+
 
 control ingress {
-  if(ipv4.protocol == 0x11){
-   apply(tbl_forward_udp);
-  } else {
-   apply(tbl_drop_non_udp);
-  } 
+    if(valid(udp)){
+        apply(tbl_forward_udp);
+   } else {
+       apply(tbl_drop);
+   }
 }
 
 control egress {

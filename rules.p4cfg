@@ -1,11 +1,11 @@
 {
     "tables": {
-        "tbl_drop_non_udp": {
+        "tbl_drop": {
             "default_rule": {
                 "action": {
                     "type": "act_drop"
                 }, 
-                "name": "drop"
+                "name": "drop_all"
             }
         }, 
         "tbl_forward_udp": {
