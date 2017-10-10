@@ -93,7 +93,6 @@ table tbl_drop {
     reads {
         standard_metadata.ingress_port : exact;
     }
-
     actions {
 		act_drop;
     }

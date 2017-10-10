@@ -620,6 +620,8 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     __mem uint8_t *payload; 
     __xread uint32_t pl_data[CHUNK_LW];
     __lmem uint32_t pl_mem[CHUNK_LW];
+    __ctm uint32_t pl_ctm[CHUNK_LW];
+
     int search_progress = 0;
     int i,to_read;
     int j=0;
@@ -667,18 +669,18 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 
     //AES_CBC_encrypt_buffer((uint8_t*)buf, (uint8_t*)plain_text,64, (uint8_t*)key,(uint8_t*)iv);
-
+/*
     while (count) {
-        /* grab a maximum of chunk */
+        // grab a maximum of chunk 
         to_read = count > CHUNK_B ? CHUNK_B : count;
 
-        /* grab a chunk of memory into transfer registers */
+        // grab a chunk of memory into transfer registers
         mem_read8(&pl_data, payload, to_read);
 
-        /* copy from transfer registers into local memory
-         * we can iterate over local memory, where transfer
-         * registers we cant
-         */
+        // copy from transfer registers into local memory
+         // we can iterate over local memory, where transfer
+         // registers we cant
+         
          for (i = 0; i < CHUNK_LW; i++)
                 pl_mem[i] = pl_data[i];
 
@@ -695,8 +697,15 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         payload += to_read;
         count -= to_read;
     }
+*/
 
-    return PIF_PLUGIN_RETURN_FORWARD;
+
+    for (i = 0; i < count; i++)
+           buf[i]=payload[i];
+
+    j = count; //prevent overwrite of beginning of buf
+
+    //return PIF_PLUGIN_RETURN_FORWARD;
 
     /* same as above, but for mu. Code duplicated as a manual unroll */
     if (mu_len) {
@@ -704,24 +713,32 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         /* Adjust payload size depending on the ctm size for the packet */
         payload += 256 << pif_pkt_info_global.ctm_size;        
         count = mu_len;
+//DBG
+//this works but probably because we were lucky to have rest of the packet
+//also in ctm. If it lands in, say emem the trick probably will not work
+        for (i = 0; i < count; i++)
+           buf[j+i]=payload[i];
+
+        /*
         while (count) {
-            /* grab a maximum of chunk */
+            // grab a maximum of chunk
             to_read = count > CHUNK_B ? CHUNK_B : count;
 
-            /* grab a chunk of memory into transfer registers */
+            // grab a chunk of memory into transfer registers 
             mem_read8(&pl_data, payload, to_read);
 
-            /* copy from transfer registers into local memory
-             * we can iterate over local memory, where transfer
-             * registers we cant
-             */
+            // copy from transfer registers into local memory
+             // we can iterate over local memory, where transfer
+             // registers we cant
+             
 
-             for (i = 0; i < CHUNK_LW; i++)
-                   pl_mem[i] = pl_data[i];
+             //this is a problem: metadata is written to the same place on then get erased?
+             //for (i = 0; i < CHUNK_LW; i++)
+             //      pl_ctm[i] = pl_data[i];
 
-             for (i = 0; i < to_read; i++) {
-                   buf[j++] = pl_mem[i/4] >> (8 * (3 - (i % 4)));
-             }
+             for (i = 0; i < to_read; i++) 
+                   buf[j++] = pl_ctm[i/4] >> (8 * (3 - (i % 4)));
+             
 
             if (j>=sizeof(buf))
                 return PIF_PLUGIN_RETURN_DROP;
@@ -729,6 +746,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
             payload += to_read;
             count -= to_read;
         }
+        */
     }
 
 
