@@ -14,18 +14,11 @@
  * Payload scan: search the payload for a string
  */
 
-/* we define a static search string */
-static __lmem uint8_t search_string[] = {'c','i'};
-
-/* an exported variable counting number of detections
- * __export means will be able to access this memory from the host
- */
-volatile __export __mem uint32_t search_detections = 0;
-volatile __export __mem uint32_t search_ctm_detections = 0;
-volatile __export __mem uint32_t search_mu_detections = 0;
+#define BLOCKLEN 16 //Block length in bytes AES is 128b block only
 
 /* Definition of static buffer size for the payload*/
 #define PAYLOAD_BUFFER_SIZE 1500
+#define OUT_PAYLOAD_BUFFER_SIZE (PAYLOAD_BUFFER_SIZE+BLOCKLEN)
 
 /* Payload chunk size in LW (32-bit) and bytes */
 #define CHUNK_LW 8
@@ -34,8 +27,10 @@ volatile __export __mem uint32_t search_mu_detections = 0;
 volatile __export __mem uint32_t pif_mu_len = 0;
 
 static __export __ctm uint32_t count;
-static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
 static __export __ctm uint8_t buf[PAYLOAD_BUFFER_SIZE];
+static __export __ctm uint8_t outbuf[PAYLOAD_BUFFER_SIZE+BLOCKLEN+BLOCKLEN];
+
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
 static __export __ctm uint8_t plain_text[64] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
                     0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
@@ -79,7 +74,6 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 
 
 #define Nb 4
-#define BLOCKLEN 16 //Block length in bytes AES is 128b block only
 
 #if defined(AES256) && (AES256 == 1)
     #define Nk 8
@@ -619,7 +613,7 @@ void initialize_buffer(){
       }
 }
 
-int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
+int pif_plugin_payload_scan_old(EXTRACTED_HEADERS_T *headers,
                             MATCH_DATA_T *match_data)
 {
     __mem uint8_t *payload;
@@ -656,11 +650,11 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     payload[1]=84;
 //    return PIF_PLUGIN_RETURN_FORWARD;
 
-    ipv4=  pif_plugin_hdr_get_ipv4(headers); 
+    ipv4 = pif_plugin_hdr_get_ipv4(headers); 
     ipv4->totalLen += 8;
 
 
-    udp =  pif_plugin_hdr_get_udp(headers); 
+    udp = pif_plugin_hdr_get_udp(headers); 
     udp->len += 8;
 
     return PIF_PLUGIN_RETURN_FORWARD;
@@ -689,15 +683,16 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 }
 
 
-void extra(){
+int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
+                            MATCH_DATA_T *match_data){
     __mem uint8_t *payload; 
-    __xread uint32_t pl_data[CHUNK_LW];
-    __lmem uint32_t pl_mem[CHUNK_LW];
-    __ctm uint32_t pl_ctm[CHUNK_LW];
 
-    int search_progress = 0;
-    int i,to_read;
-    int j=0;
+    int i;
+    int length, outlength, length_inc;
+
+    PIF_PLUGIN_udp_T *udp; 
+    PIF_PLUGIN_ipv4_T *ipv4; 
+
 
     uint32_t mu_len, ctm_len;
 
@@ -729,7 +724,7 @@ void extra(){
            buf[i]=payload[i];
     }
 
-    j = count; //prevent overwrite of beginning of buf
+    length = count; //prevent overwrite of beginning of buf
 
     /* same as above, but for mu. Code duplicated as a manual unroll */
     if (mu_len) {
@@ -738,11 +733,65 @@ void extra(){
         payload += 256 << pif_pkt_info_global.ctm_size;        
         count = mu_len;
         for (i = 0; i < count; i++) {
-           buf[j+i]=payload[i];
+           buf[length+i]=payload[i];
+        }
+        length=length+count;    
+
+    }
+
+
+    outlength = (length % BLOCKLEN) == 0 ? length : length + BLOCKLEN - (length % BLOCKLEN);
+
+    for (i = 0; i < BLOCKLEN; i++) {
+           outbuf[i]=iv[i];
+    }
+
+    AES_CBC_encrypt_buffer((uint8_t*)(outbuf)+BLOCKLEN, (uint8_t*)buf,length, (uint8_t*)key,(uint8_t*)iv);
+
+//TODO offset: outlength + BLOCKLEN
+    length_inc = outlength - length + BLOCKLEN;
+    pif_pkt_make_space(42, length_inc); //+BLOCKLEN for iv
+
+    if (pif_pkt_info_global.split) { /* payload split to MU */
+        uint32_t sop; /* start of packet offset */
+        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+    } else /* no data in MU */
+        mu_len = 0;
+
+    /* debug info for mu_split */
+    pif_mu_len = mu_len;
+    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
+    /* Get a pointer to the ctm portion */
+    payload = pif_pkt_info_global.pkt_buf;
+    /* point to just beyond the parsed headers */
+    payload += pif_pkt_info_global.pkt_pl_off;
+
+    for (i = 0; i < count; i++) {
+           payload[i]=outbuf[i];
+    }
+
+
+    length = count; //prevent overwrite of beginning of buf
+
+    /* same as above, but for mu. Code duplicated as a manual unroll */
+    if (mu_len) {
+        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+        /* Adjust payload size depending on the ctm size for the packet */
+        payload += 256 << pif_pkt_info_global.ctm_size;        
+        count = mu_len;
+        for (i = 0; i < count; i++) {
+           payload[i]=outbuf[length+i];
         }
 
     }
-    //AES_CBC_encrypt_buffer((uint8_t*)buf, (uint8_t*)plain_text,64, (uint8_t*)key,(uint8_t*)iv);
+
+    ipv4 = pif_plugin_hdr_get_ipv4(headers); 
+    ipv4->totalLen += length_inc;
+
+
+    udp = pif_plugin_hdr_get_udp(headers); 
+    udp->len += length_inc;
 
     return PIF_PLUGIN_RETURN_FORWARD;
 }
