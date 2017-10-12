@@ -613,75 +613,6 @@ void initialize_buffer(){
       }
 }
 
-int pif_plugin_payload_scan_old(EXTRACTED_HEADERS_T *headers,
-                            MATCH_DATA_T *match_data)
-{
-    __mem uint8_t *payload;
-    uint32_t mu_len, ctm_len; 
-    int i = 0;
-    int j = 0;
-    PIF_PLUGIN_udp_T *udp; 
-    PIF_PLUGIN_ipv4_T *ipv4; 
-
-    pif_pkt_make_space(42, 8);
-
-    if (pif_pkt_info_global.split) { /* payload split to MU */
-        uint32_t sop; /* start of packet offset */
-        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
-        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
-    } else /* no data in MU */
-        mu_len = 0;
-
-    /* debug info for mu_split */
-    pif_mu_len = mu_len;
-
-    /* get the ctm byte count:
-     * packet length - offset to parsed headers - byte_count_in_mu
-     * Note: the parsed headers are always in ctm
-     */
-    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
-    /* Get a pointer to the ctm portion */
-    payload = pif_pkt_info_global.pkt_buf;
-    /* point to just beyond the parsed headers */
-    payload += pif_pkt_info_global.pkt_pl_off;
-
-// this works
-    payload[0]=42;
-    payload[1]=84;
-//    return PIF_PLUGIN_RETURN_FORWARD;
-
-    ipv4 = pif_plugin_hdr_get_ipv4(headers); 
-    ipv4->totalLen += 8;
-
-
-    udp = pif_plugin_hdr_get_udp(headers); 
-    udp->len += 8;
-
-    return PIF_PLUGIN_RETURN_FORWARD;
-
-    for (i = 0; i < count; i++) {
-           payload[i]=payload[i];
-    }
-
-
-    j = count; //prevent overwrite of beginning of buf
-
-    /* same as above, but for mu. Code duplicated as a manual unroll */
-    if (mu_len) {
-        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-        /* Adjust payload size depending on the ctm size for the packet */
-        payload += 256 << pif_pkt_info_global.ctm_size;        
-        count = mu_len;
-        for (i = 0; i < count; i++) {
-           buf[j+i]=payload[i];
-        }
-
-    }
-
-    return PIF_PLUGIN_RETURN_FORWARD;
-
-}
-
 
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
                             MATCH_DATA_T *match_data){
@@ -689,16 +620,23 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
     int i;
     int length, outlength, length_inc;
+    uint32_t mu_len, ctm_len;
 
     PIF_PLUGIN_udp_T *udp; 
     PIF_PLUGIN_ipv4_T *ipv4; 
 
+    ipv4 = pif_plugin_hdr_get_ipv4(headers); 
+    
+    if(ipv4->mf_flag == 1){
+        return PIF_PLUGIN_RETURN_DROP;
+    }
+    if(ipv4->fragOffset > 0 ){
+        return PIF_PLUGIN_RETURN_DROP;
+    }
 
-    uint32_t mu_len, ctm_len;
-
-    initialize_buffer();
-
-
+    if(pif_pkt_info_global.pkt_len > (1500 - BLOCKLEN)){
+         return PIF_PLUGIN_RETURN_DROP;
+    }
 
     if (pif_pkt_info_global.split) { /* payload split to MU */
         uint32_t sop; /* start of packet offset */
@@ -786,7 +724,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
     }
 
-    ipv4 = pif_plugin_hdr_get_ipv4(headers); 
+
     ipv4->totalLen += length_inc;
 
 

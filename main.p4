@@ -17,7 +17,9 @@ header_type ipv4_t {
         diffserv : 8;
         totalLen : 16;
         identification : 16;
-        flags : 3;
+        reserved_flag : 1;
+        df_flag : 1;
+        mf_flag : 1;
         fragOffset : 13;
         ttl : 8;
         protocol : 8;
