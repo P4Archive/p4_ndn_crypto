@@ -626,6 +626,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     uint32_t mu_len, ctm_len; 
     int i = 0;
     int j = 0;
+    PIF_PLUGIN_udp_T *udp; 
+    PIF_PLUGIN_ipv4_T *ipv4; 
+
     pif_pkt_make_space(42, 8);
 
     if (pif_pkt_info_global.split) { /* payload split to MU */
@@ -648,8 +651,17 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     /* point to just beyond the parsed headers */
     payload += pif_pkt_info_global.pkt_pl_off;
 
+// this works
     payload[0]=42;
     payload[1]=84;
+//    return PIF_PLUGIN_RETURN_FORWARD;
+
+    ipv4=  pif_plugin_hdr_get_ipv4(headers); 
+    ipv4->totalLen += 8;
+
+
+    udp =  pif_plugin_hdr_get_udp(headers); 
+    udp->len += 8;
 
     return PIF_PLUGIN_RETURN_FORWARD;
 

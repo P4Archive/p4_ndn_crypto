@@ -8,8 +8,8 @@
         }, 
         "#Version": "61.02", 
         "BreakpointSortOptions": {
-            "FilterByIndex": -1, 
-            "SecFilterIndex": -1, 
+            "FilterByIndex": 0, 
+            "SecFilterIndex": 0, 
             "ShowCodeBreakpoints": false, 
             "ShowDataBreakpoints": false, 
             "ShowMemoryBreakpoints": false
@@ -69,22 +69,22 @@
                     "ptn_Child4=ThreadWindow3", 
                     "[WorkState_v1_2.ThreadWindows.ThreadWindow0]", 
                     "ThreadName=Thread0///", 
-                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPOEAAAAAAOEAAAAAAAHDAAAAANMBAAAAA", 
+                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPAAAAAAAAAAAAAAAACCDAAAAAPHBAAAAA", 
                     "TrackActiveThread=False", 
                     "ShowListView=False", 
                     "[WorkState_v1_2.ThreadWindows.ThreadWindow1]", 
                     "ThreadName=Thread4///", 
-                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPIGAAAAAAIGAAAAAAKIDAAAAAHOBAAAAA", 
+                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPKBAAAAAAKBAAAAAAMDDAAAAAJJBAAAAA", 
                     "TrackActiveThread=False", 
                     "ShowListView=False", 
                     "[WorkState_v1_2.ThreadWindows.ThreadWindow2]", 
                     "ThreadName=Thread0///", 
-                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPCIAAAAAACIAAAAAAEKDAAAAABACAAAAA", 
+                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPEDAAAAAAEDAAAAAAGFDAAAAADLBAAAAA", 
                     "TrackActiveThread=False", 
                     "ShowListView=False", 
                     "[WorkState_v1_2.ThreadWindows.ThreadWindow3]", 
                     "ThreadName=Thread0///", 
-                    "Placement=MCAAAAAAAAAAAAAABAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPMJAAAAAAMJAAAAAAOLDAAAAALBCAAAAA", 
+                    "Placement=MCAAAAAACAAAAAAADAAAAAAAPPPPPPPPPPPPPPPPIPPPPPPPBOPPPPPPOEAAAAAAOEAAAAAAAHDAAAAANMBAAAAA", 
                     "TrackActiveThread=False", 
                     "ShowListView=False"
                 ], 
@@ -7019,24 +7019,6 @@
                 "P4ShadowBreakpoint": true, 
                 "SourceViewBreakpoint": true, 
                 "UniqueBreakpointID": 2147483882
-            }, 
-            {
-                "BreakpointSourceLocations": [
-                    {
-                        "BptSourceFileLine": 752, 
-                        "BptSourceFileLocation": ".\\actions.c"
-                    }
-                ], 
-                "Enabled": false, 
-                "EngineSliceName": "pif_app_nfd.list", 
-                "MicroEngine": {
-                    "ChipName": "", 
-                    "MicroEngineNumber": "i32.me0"
-                }, 
-                "P4Breakpoint": false, 
-                "P4ShadowBreakpoint": false, 
-                "SourceViewBreakpoint": true, 
-                "UniqueBreakpointID": 2147483963
             }, 
             {
                 "BreakpointSourceLocations": [
