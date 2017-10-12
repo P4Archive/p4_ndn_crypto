@@ -24,6 +24,9 @@ volatile __export __mem uint32_t search_detections = 0;
 volatile __export __mem uint32_t search_ctm_detections = 0;
 volatile __export __mem uint32_t search_mu_detections = 0;
 
+/* Definition of static buffer size for the payload*/
+#define PAYLOAD_BUFFER_SIZE 1500
+
 /* Payload chunk size in LW (32-bit) and bytes */
 #define CHUNK_LW 8
 #define CHUNK_B (CHUNK_LW*4)
@@ -32,7 +35,7 @@ volatile __export __mem uint32_t pif_mu_len = 0;
 
 static __export __ctm uint32_t count;
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
-static __export __ctm uint8_t buf[1500];
+static __export __ctm uint8_t buf[PAYLOAD_BUFFER_SIZE];
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
 static __export __ctm uint8_t plain_text[64] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
                     0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
@@ -609,14 +612,72 @@ void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 #endif // #if defined(CBC) && (CBC == 1)
 
 
-
-
-
-
+void initialize_buffer(){
+    int i  = 0;
+    for (i=0; i<PAYLOAD_BUFFER_SIZE; i++){
+        buf[i]=222;
+      }
+}
 
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
                             MATCH_DATA_T *match_data)
 {
+    __mem uint8_t *payload;
+    uint32_t mu_len, ctm_len; 
+    int i = 0;
+    int j = 0;
+    pif_pkt_make_space(42, 8);
+
+    if (pif_pkt_info_global.split) { /* payload split to MU */
+        uint32_t sop; /* start of packet offset */
+        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+    } else /* no data in MU */
+        mu_len = 0;
+
+    /* debug info for mu_split */
+    pif_mu_len = mu_len;
+
+    /* get the ctm byte count:
+     * packet length - offset to parsed headers - byte_count_in_mu
+     * Note: the parsed headers are always in ctm
+     */
+    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
+    /* Get a pointer to the ctm portion */
+    payload = pif_pkt_info_global.pkt_buf;
+    /* point to just beyond the parsed headers */
+    payload += pif_pkt_info_global.pkt_pl_off;
+
+    payload[0]=42;
+    payload[1]=84;
+
+    return PIF_PLUGIN_RETURN_FORWARD;
+
+    for (i = 0; i < count; i++) {
+           payload[i]=payload[i];
+    }
+
+
+    j = count; //prevent overwrite of beginning of buf
+
+    /* same as above, but for mu. Code duplicated as a manual unroll */
+    if (mu_len) {
+        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+        /* Adjust payload size depending on the ctm size for the packet */
+        payload += 256 << pif_pkt_info_global.ctm_size;        
+        count = mu_len;
+        for (i = 0; i < count; i++) {
+           buf[j+i]=payload[i];
+        }
+
+    }
+
+    return PIF_PLUGIN_RETURN_FORWARD;
+
+}
+
+
+void extra(){
     __mem uint8_t *payload; 
     __xread uint32_t pl_data[CHUNK_LW];
     __lmem uint32_t pl_mem[CHUNK_LW];
@@ -626,20 +687,10 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     int i,to_read;
     int j=0;
 
-    //int count; //now global
     uint32_t mu_len, ctm_len;
-    //__declspec(local_mem) uint8_t buf[64];
-    //__declspec(ctm export scope(island)) uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
-    //__declspec(local_mem) uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
-    //__declspec(local_mem) uint8_t plain_text[64] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
-                    //0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
-                    //0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
-                    //0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
 
-    /* figure out how much data is in external memory vs ctm */
+    initialize_buffer();
 
-    for (i=0; i<1500; i++)
-        buf[i]=222;
 
 
     if (pif_pkt_info_global.split) { /* payload split to MU */
@@ -662,50 +713,11 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     /* point to just beyond the parsed headers */
     payload += pif_pkt_info_global.pkt_pl_off;
 
-    /*for(i=0; i<15; i++){
-        iv[i] = iv[i]+7;
-    }*/
-
-
-
-    //AES_CBC_encrypt_buffer((uint8_t*)buf, (uint8_t*)plain_text,64, (uint8_t*)key,(uint8_t*)iv);
-/*
-    while (count) {
-        // grab a maximum of chunk 
-        to_read = count > CHUNK_B ? CHUNK_B : count;
-
-        // grab a chunk of memory into transfer registers
-        mem_read8(&pl_data, payload, to_read);
-
-        // copy from transfer registers into local memory
-         // we can iterate over local memory, where transfer
-         // registers we cant
-         
-         for (i = 0; i < CHUNK_LW; i++)
-                pl_mem[i] = pl_data[i];
-
-         for (i = 0; i < to_read; i++) {
-              buf[j++] = pl_mem[i/4] >> (8 * (3 - (i % 4)));
-         }
-
-
-        if (j>=sizeof(buf))
-                return PIF_PLUGIN_RETURN_DROP;
-        
-
-
-        payload += to_read;
-        count -= to_read;
-    }
-*/
-
-
-    for (i = 0; i < count; i++)
+    for (i = 0; i < count; i++) {
            buf[i]=payload[i];
+    }
 
     j = count; //prevent overwrite of beginning of buf
-
-    //return PIF_PLUGIN_RETURN_FORWARD;
 
     /* same as above, but for mu. Code duplicated as a manual unroll */
     if (mu_len) {
@@ -713,42 +725,12 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         /* Adjust payload size depending on the ctm size for the packet */
         payload += 256 << pif_pkt_info_global.ctm_size;        
         count = mu_len;
-//DBG
-//this works but probably because we were lucky to have rest of the packet
-//also in ctm. If it lands in, say emem the trick probably will not work
-        for (i = 0; i < count; i++)
+        for (i = 0; i < count; i++) {
            buf[j+i]=payload[i];
-
-        /*
-        while (count) {
-            // grab a maximum of chunk
-            to_read = count > CHUNK_B ? CHUNK_B : count;
-
-            // grab a chunk of memory into transfer registers 
-            mem_read8(&pl_data, payload, to_read);
-
-            // copy from transfer registers into local memory
-             // we can iterate over local memory, where transfer
-             // registers we cant
-             
-
-             //this is a problem: metadata is written to the same place on then get erased?
-             //for (i = 0; i < CHUNK_LW; i++)
-             //      pl_ctm[i] = pl_data[i];
-
-             for (i = 0; i < to_read; i++) 
-                   buf[j++] = pl_ctm[i/4] >> (8 * (3 - (i % 4)));
-             
-
-            if (j>=sizeof(buf))
-                return PIF_PLUGIN_RETURN_DROP;
-
-            payload += to_read;
-            count -= to_read;
         }
-        */
-    }
 
+    }
+    //AES_CBC_encrypt_buffer((uint8_t*)buf, (uint8_t*)plain_text,64, (uint8_t*)key,(uint8_t*)iv);
 
     return PIF_PLUGIN_RETURN_FORWARD;
 }
