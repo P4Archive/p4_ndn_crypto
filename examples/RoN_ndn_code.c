@@ -695,7 +695,7 @@ int main(){
     int i = 0 ;
     uint8_t* buf = empayload;
     uint8_t* encrypt_me_start;
-    uint8_t* encrypt_me_end;
+    uint8_t* start_unencrypted_content;
     uint64_t TLVlen;
     uint8_t TLVlenK;
     uint64_t currentPosition = 0;
@@ -722,7 +722,7 @@ int main(){
 		if (tlv_len_offset(buf, currentPosition, &TLVlen, &TLVlenK) != 0){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
-
+		/* MetaInfo and Name TLVs are also in the packets, only check for Encrypt me type */
 		/* Check if type matches encrypt me header */
 		if(TLVlen == TYPE_ENCRYPT_ME_HEADER){
 			/* Enter the encrypt me header */
@@ -765,11 +765,14 @@ int main(){
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
+			// End of Ciphergroup TLV
+
+			/* Get the length of the TLV */
+			if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
+				return PIF_PLUGIN_RETURN_DROP;
+			}
+
 			if(TLVlen == TYPE_ENCRYPT_ME_HEADER_KEY_ID){
-				/* Enter the encrypt me header cipher suite */
-				if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-						return PIF_PLUGIN_RETURN_DROP;
-				}
 				/* Jump over type field */
 				encryptMeHeaderPosition += TLVlenK;
 
@@ -789,8 +792,9 @@ int main(){
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
-			encrypt_me_end = buf + encryptMeHeaderPosition;
-		}
+			start_unencrypted_content = buf + encryptMeHeaderPosition;
+			break;
+		} // End of Encrypt me TLV if
 		/* Jump over type field */
 		currentPosition += TLVlenK;
 
@@ -804,7 +808,11 @@ int main(){
 		if(currentPosition > dataSize){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
-	}
+	} // End of for loop
+	// TODO: Check if start_unencrypted_content has actually been set, could be with a boolean flag or so
+
+
+
 
 
     // Find encrypt me header - get pointer to start
