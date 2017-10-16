@@ -26,9 +26,11 @@
 #define TYPE_ENCRYPT_ME_ENCRYPTED_CONTENT 0x33003
 
 #define CIPHER_SUITE_NONE 0
-#define CIPHER_SUITE_AES_128_CBC 1
+#define CIPHER_SUITE_AES_128_CBC 0x77
 #define CIPHER_SUITE_AES_192_CBC 2
 #define CIPHER_SUITE_AES_256_CBC 3
+
+#define KEY_ID 0x88
 
 
 /* Payload chunk size in LW (32-bit) and bytes */
@@ -725,51 +727,78 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
     }
 
+    // Find encrypt me header - get pointer to start
+    // Find start of signature header - get pointer to start
+    // Extract cipher suite and key from encrypt me header
+    // Find end of encrypt me header - get pointer, this should be start of content
+    // Determine the range of content ( end pointer of encrypt me + 1 -- start of signature pointer)
+    // Pre-prend IV in the output buffer + (generate IV instead of )
+    // Call encrypt function with start pointer of content, length is end encrypt me pointer - start signature pointers
+    // Calculate increase of content size
+    // Make space using the increase content size value after the NDN header ( end is best)
+    // Create EncryptedContent TLV - calculate length (original + max 2x padding)
+    // Make space for T-L and the extra length of the value
+    // Go to end of encrypt me header pointer
+    // Append the Encrypted Data TLV to the Encrypt Me header from the buffer
+    // Update length of Encrypt me Header
+    // Recalculate Signature
+    // Recalculate the L field of the Data TLV
+    // Recalculate UDP length
+    // Recalculate IP length
+    // Recalculate UDP checksum
+    // Recalculate IP checksum
 
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#ifdef disable_encryption 
     outlength = (length % BLOCKLEN) == 0 ? length : length + BLOCKLEN - (length % BLOCKLEN);
 
     for (i = 0; i < BLOCKLEN; i++) {
            outbuf[i]=iv[i];
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#ifdef disableextra 
     AES_CBC_encrypt_buffer((uint8_t*)(outbuf)+BLOCKLEN, (uint8_t*)buf,length, (uint8_t*)key,(uint8_t*)iv);
 
     //TODO offset: outlength + BLOCKLEN
