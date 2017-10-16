@@ -1,3 +1,6 @@
+#include <assert.h>
+#include <stdio.h>
+
 #include <stdint.h>
 #include <string.h>
 
@@ -513,15 +516,9 @@ static void InvCipher(void)
 }
 
 
-
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
-
-
-
-
-
 #if defined(CBC) && (CBC == 1)
 
 
@@ -648,7 +645,6 @@ static int tlv_len_offset(uint8_t *buff, int currpos, uint64_t *TLVlen, uint8_t 
 }
 
 
-
 uint8_t empayload[] = {
 0x06, 0xfd, 0x01, 0x9f, 0x07, 0x21, 0x08, 0x03, 0x6e, 0x64, 0x6e, 0x08, 0x03, 0x65, 0x64, 0x75,
 0x08, 0x03, 0x75, 0x63, 0x69, 0x08, 0x04, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x0a, 0x31, 0x30, 0x36,
@@ -679,15 +675,16 @@ uint8_t empayload[] = {
 
 
 
-
-int set_cipher_from_value(uint8_t cipher_value){
-
-	switch(cipher_value){
-	case 253 :
-		return CIPHER_SUITE_AES_128_CBC;
-	default :
-		return CIPHER_SUITE_AES_128_CBC;
+int extract_value_at_position(uint64_t TLVlen, uint8_t* buf, int* position){
+	int i = 0;
+	int pos = 0;
+	uint64_t value = 0;
+	for( i = 0; i < TLVlen; i++){
+		pos = *position;
+		value = value * 256 + buf[pos];
+		*position += 1;
 	}
+	return value;
 }
 
 
@@ -701,7 +698,9 @@ int main(){
     uint64_t currentPosition = 0;
     uint32_t cipherSuite = 0;
     uint32_t keyId = 0;
-    uint64_t dataSize = 0;
+    uint64_t dataTLVSize = 0;
+    uint32_t contentSize = 0;
+    uint32_t contentTLVSize = 0;
 
 	if(buf[currentPosition] != TYPE_NDN_DATA){
 		return PIF_PLUGIN_RETURN_DROP;
@@ -713,7 +712,7 @@ int main(){
 		return PIF_PLUGIN_RETURN_DROP;
 	}
 
-	dataSize = TLVlen;
+	dataTLVSize = TLVlen;
 	currentPosition += TLVlenK;
 
 	for(;;){
@@ -742,6 +741,7 @@ int main(){
 			if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
 				return PIF_PLUGIN_RETURN_DROP;
 			}
+
 			if(TLVlen == TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE){
 				/* Enter the encrypt me header cipher suite */
 				if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
@@ -759,9 +759,7 @@ int main(){
 				encryptMeHeaderPosition += TLVlenK;
 
 				/* Extract the (ciphersuite) value from the value field*/
-				for(i=0; i < TLVlen; i++){
-					cipherSuite = cipherSuite * 256 + buf[encryptMeHeaderPosition++];
-				}
+				cipherSuite = extract_value_at_position(TLVlen, buf, &encryptMeHeaderPosition);
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
@@ -785,10 +783,7 @@ int main(){
 				encryptMeHeaderPosition += TLVlenK;
 
 				/* Extract the (keyId) value from the value field*/
-				for(i=0; i < TLVlen; i++){
-					keyId = keyId * 256 + buf[encryptMeHeaderPosition++];
-				}
-
+				keyId = extract_value_at_position(TLVlen, buf, &encryptMeHeaderPosition);
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
@@ -805,13 +800,29 @@ int main(){
 		/* Jump over the value length and length field */
 		currentPosition += TLVlen + TLVlenK;
 
-		if(currentPosition > dataSize){
+		if(currentPosition > dataTLVSize){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
 	} // End of for loop
 	// TODO: Check if start_unencrypted_content has actually been set, could be with a boolean flag or so
+	// start_unencrypted_content
+	int content_position = 0;
 
+	/* Get the length of the content TLV */
+	if (tlv_len_offset(start_unencrypted_content, content_position, &TLVlen, &TLVlenK) != 0){
+		return PIF_PLUGIN_RETURN_DROP;
+	}
 
+	/* Jump over type field */
+	content_position += TLVlenK;
+
+	/* Get the length of the content TLV */
+	if (tlv_len_offset(start_unencrypted_content, content_position, &TLVlen, &TLVlenK) != 0){
+		return PIF_PLUGIN_RETURN_DROP;
+	}
+
+	contentSize = TLVlen;
+	contentTLVSize = TLVlenK + TLVlen + 1; // Calculate the end point of the content, type is always 1 byte (0x15), length of length and the length of the value
 
 
 
@@ -820,6 +831,7 @@ int main(){
     // Extract cipher suite and key from encrypt me header
     // Find end of encrypt me header - get pointer, this should be start of content
     // Determine the range of content ( end pointer of encrypt me + 1 -- start of signature pointer)
+
     // Pre-prend IV in the output buffer + (generate IV instead of )
     // Call encrypt function with start pointer of content, length is end encrypt me pointer - start signature pointers
     // Calculate increase of content size
@@ -835,6 +847,7 @@ int main(){
     // Recalculate IP length
     // Recalculate UDP checksum
     // Recalculate IP checksum
+
     return 0;
 
 }
