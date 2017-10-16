@@ -675,6 +675,21 @@ uint8_t empayload[] = {
 
 
 
+
+int jump_over_field(uint8_t *buff, int *position, uint64_t *TLVlen, uint8_t *TLVlenK){
+	/* Jump over field */
+	int newPosition = *position;
+
+	if (tlv_len_offset(&buf, newPosition, &TLVlen, &TLVlenK) != 0){
+		return PIF_PLUGIN_RETURN_DROP;
+	}
+	newPosition += *TLVlenK;
+	*position = newPosition;
+
+	return PIF_PLUGIN_RETURN_FORWARD;
+}
+
+
 int extract_value_at_position(uint64_t TLVlen, uint8_t* buf, int* position){
 	int i = 0;
 	int pos = 0;
@@ -728,8 +743,11 @@ int main(){
 			int encryptMeHeaderPosition = currentPosition;
 			encrypt_me_start = buf + encryptMeHeaderPosition;
 
-			/* Jump over type field */
 			encryptMeHeaderPosition += TLVlenK;
+
+			/* Jump over type field */
+			jump_over_field(buf, &encryptMeHeaderPosition, &TLVlen, &TLVlenK);
+
 
 			if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
 				return PIF_PLUGIN_RETURN_DROP;
@@ -847,6 +865,13 @@ int main(){
     // Recalculate IP length
     // Recalculate UDP checksum
     // Recalculate IP checksum
+
+	assert(keyId == 0x88);
+	assert(cipherSuite == 0x77);
+	assert(currentPosition == 45);
+	assert(dataTLVSize == 415);
+
+
 
     return 0;
 
