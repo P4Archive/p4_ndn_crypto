@@ -20,6 +20,17 @@
 #define PAYLOAD_BUFFER_SIZE 1500
 #define OUT_PAYLOAD_BUFFER_SIZE (PAYLOAD_BUFFER_SIZE+BLOCKLEN)
 
+#define TYPE_ENCRYPT_ME_HEADER 0x33000
+#define TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE 0x33001
+#define TYPE_ENCRYPT_ME_HEADER_KEY_ID 0x33002
+#define TYPE_ENCRYPT_ME_ENCRYPTED_CONTENT 0x33003
+
+#define CIPHER_SUITE_NONE 0
+#define CIPHER_SUITE_AES_128_CBC 1
+#define CIPHER_SUITE_AES_192_CBC 2
+#define CIPHER_SUITE_AES_256_CBC 3
+
+
 /* Payload chunk size in LW (32-bit) and bytes */
 #define CHUNK_LW 8
 #define CHUNK_B (CHUNK_LW*4)
@@ -605,12 +616,49 @@ void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 
 #endif // #if defined(CBC) && (CBC == 1)
 
+static int tlv_len_offset(uint8_t *buff, int currpos, uint64_t *TLVlen, uint8_t *TLVlenK){
+	uint8_t len0 = buff[currpos++]; //get length and advance
+	uint64_t len = 0;
+	uint8_t lenK = 1;
+    uint8_t i = 0;
+
+	if (len0<253){
+		len = len0;
+    }
+	else {
+		//length encoded in following 2,4,or 8 octets
+		switch (len0){
+    		case 253 :
+    			lenK = 2;
+    			break;
+    		case 254 :
+    			lenK = 4;
+    			break;
+    		case 255 :
+    			lenK = 8;
+    			break;
+    		default :
+    			//printf("wrong ndn datagram format!\n");
+    			return (-1);
+
+		}
+		for(i=0; i < lenK; i++){
+			len = len * 256 + buff[currpos++];
+		}
+		lenK++; //account for the fact that first octet plays now indication role
+	}
+	*TLVlen = len;
+	*TLVlenK = lenK;
+	return(0);
+}
+
+
 
 void initialize_buffer(){
     int i  = 0;
     for (i=0; i<PAYLOAD_BUFFER_SIZE; i++){
         buf[i]=222;
-      }
+     }
 }
 
 
@@ -684,12 +732,49 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
            outbuf[i]=iv[i];
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#ifdef disableextra 
     AES_CBC_encrypt_buffer((uint8_t*)(outbuf)+BLOCKLEN, (uint8_t*)buf,length, (uint8_t*)key,(uint8_t*)iv);
 
-//TODO offset: outlength + BLOCKLEN
+    //TODO offset: outlength + BLOCKLEN
     length_inc = outlength - length + BLOCKLEN;
     pif_pkt_make_space(42, length_inc); //+BLOCKLEN for iv
-
     if (pif_pkt_info_global.split) { /* payload split to MU */
         uint32_t sop; /* start of packet offset */
         sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
@@ -721,7 +806,6 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         for (i = 0; i < count; i++) {
            payload[i]=outbuf[length+i];
         }
-
     }
 
 
@@ -730,7 +814,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
     udp = pif_plugin_hdr_get_udp(headers); 
     udp->len += length_inc;
-
+#endif
     return PIF_PLUGIN_RETURN_FORWARD;
+
+
 }
 
