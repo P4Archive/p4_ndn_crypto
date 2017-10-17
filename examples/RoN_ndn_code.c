@@ -27,12 +27,15 @@
 #define TYPE_ENCRYPT_ME_HEADER 33000
 #define TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE 33001
 #define TYPE_ENCRYPT_ME_HEADER_KEY_ID 33002
-#define TYPE_ENCRYPT_ME_ENCRYPTED_CONTENT 33003
+#define TYPE_ENCRYPT_ME_ENCRYPTED_CONTENT 0x80eb
 
 #define CIPHER_SUITE_NONE 0
 #define CIPHER_SUITE_AES_128_CBC 0x77
 #define CIPHER_SUITE_AES_192_CBC 2
 #define CIPHER_SUITE_AES_256_CBC 3
+
+#define BUFFER_TYPE_INCREASE 3
+#define BUFFER_LENGTH_INCREASE 3
 
 #define KEY_ID 0x88
 
@@ -51,7 +54,7 @@ volatile __export __mem uint32_t pif_mu_len = 0;
 static __export __ctm uint32_t count;
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
 static __export __ctm uint8_t buf[PAYLOAD_BUFFER_SIZE];
-static __export __ctm uint8_t outbuf[PAYLOAD_BUFFER_SIZE+BLOCKLEN+BLOCKLEN];
+static __export __ctm uint8_t outbuf[PAYLOAD_BUFFER_SIZE+BLOCKLEN+BLOCKLEN+BUFFER_LENGTH_INCREASE+BUFFER_TYPE_INCREASE];
 
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
 static __export __ctm uint8_t plain_text[64] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
@@ -817,11 +820,50 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 		}
 	}
 
+    return 0;
+
+}
+
+int main(){
+	encrypt_me_result result;
+	int i;
+	int encryptMeOffset = 0;
+	uint32_t sizeOfContentAfterEncryption = 0;
+
+	if(get_encrypt_me_header_content(empayload, &result) != 0){
+		return PIF_PLUGIN_RETURN_DROP;
+	}
+	sizeOfContentAfterEncryption =  (result.contentTLVSize % BLOCKLEN) == 0 ? result.contentTLVSize : result.contentTLVSize + BLOCKLEN - (result.contentTLVSize % BLOCKLEN);
+
+	outbuf[0] = 0xfd;
+	outbuf[1] = 0x80;
+	outbuf[2] = 0xeb;
+
+	if(sizeOfContentAfterEncryption < 253){
+		outbuf[3] = sizeOfContentAfterEncryption;
+		encryptMeOffset = 1;
+	} else {
+		outbuf[3] = 0xfd;
+		outbuf[4] = (sizeOfContentAfterEncryption >> 8);
+		outbuf[5] = (sizeOfContentAfterEncryption & 0xff);
+		encryptMeOffset=3;
+	}
+
+    for (i = 0; i < BLOCKLEN; i++) {
+	   outbuf[i + encryptMeOffset] = iv[i];
+    }
+    encryptMeOffset += BLOCKLEN;
+
+    AES_CBC_encrypt_buffer((uint8_t*)(outbuf + encryptMeOffset), (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize, (uint8_t*)key,(uint8_t*) iv);
+
+
     // Pre-prend IV in the output buffer + (generate IV instead of )
     // Call encrypt function with start pointer of content, length is end encrypt me pointer - start signature pointers
     // Calculate increase of content size
+
     // Make space using the increase content size value after the NDN header ( end is best)
     // Create EncryptedContent TLV - calculate length (original + max 2x padding)
+
     // Make space for T-L and the extra length of the value
     // Go to end of encrypt me header pointer
     // Append the Encrypted Data TLV to the Encrypt Me header from the buffer
@@ -832,14 +874,6 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
     // Recalculate IP length
     // Recalculate UDP checksum
     // Recalculate IP checksum
-    return 0;
 
-}
-
-int main(){
-	encrypt_me_result result;
-	if(get_encrypt_me_header_content(empayload, &result) != 0){
-		return PIF_PLUGIN_RETURN_DROP;
-	}
 	return 0;
 }
