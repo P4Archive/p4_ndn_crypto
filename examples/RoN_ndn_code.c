@@ -19,6 +19,10 @@
 
 
 #define TYPE_NDN_DATA 0x06
+#define TYPE_NDN_SIGNATURE_INFO 0x16
+#define TYPE_NDN_SIGNATURE_VALUE 0x17
+
+
 
 #define TYPE_ENCRYPT_ME_HEADER 33000
 #define TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE 33001
@@ -609,9 +613,9 @@ void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 
 #endif // #if defined(CBC) && (CBC == 1)
 
-static int tlv_len_offset(uint8_t *buff, int currpos, uint64_t *TLVlen, uint8_t *TLVlenK){
+static int tlv_len_offset(uint8_t *buff, int currpos, uint32_t *TLVlen, uint32_t *TLVlenK){
 	uint8_t len0 = buff[currpos++]; //get length and advance
-	uint64_t len = 0;
+	uint32_t len = 0;
 	uint8_t lenK = 1;
     uint8_t i = 0;
 
@@ -676,172 +680,140 @@ uint8_t empayload[] = {
 
 
 
-int jump_over_field(uint8_t *buff, int *position, uint64_t *TLVlen, uint8_t *TLVlenK){
-	/* Jump over field */
-	int newPosition = *position;
-
-	if (tlv_len_offset(&buf, newPosition, &TLVlen, &TLVlenK) != 0){
-		return PIF_PLUGIN_RETURN_DROP;
-	}
-	newPosition += *TLVlenK;
-	*position = newPosition;
-
-	return PIF_PLUGIN_RETURN_FORWARD;
-}
 
 
-int extract_value_at_position(uint64_t TLVlen, uint8_t* buf, int* position){
+uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
 	int i = 0;
-	int pos = 0;
-	uint64_t value = 0;
-	for( i = 0; i < TLVlen; i++){
-		pos = *position;
-		value = value * 256 + buf[pos];
-		*position += 1;
+	uint32_t value = 0;
+	for( i = 0; i < length; i++){
+		value = value * 256 + buf[i];
 	}
 	return value;
 }
 
+int get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
+	return(tlv_len_offset(buf, 0, type, type_size));
+}
+
+int get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length_size){
+	return(tlv_len_offset(buf, offset, length, length_size));
+}
 
 int main(){
     int i = 0 ;
     uint8_t* buf = empayload;
     uint8_t* encrypt_me_start;
     uint8_t* start_unencrypted_content;
-    uint64_t TLVlen;
+    uint32_t TLVlen;
     uint8_t TLVlenK;
-    uint64_t currentPosition = 0;
+    uint32_t currentPosition = 0;
     uint32_t cipherSuite = 0;
     uint32_t keyId = 0;
-    uint64_t dataTLVSize = 0;
+    uint32_t dataTLVSize = 0;
     uint32_t contentSize = 0;
     uint32_t contentTLVSize = 0;
+    uint32_t encryptMeTLVSize = 0;
+    uint32_t start_unencrypted_position = 0;
+    uint32_t type =0 , type_size =0 , length =0 , length_size = 0;
 
-	if(buf[currentPosition] != TYPE_NDN_DATA){
+
+	get_type(buf+currentPosition, &type, &type_size);
+
+	if(type != TYPE_NDN_DATA){
 		return PIF_PLUGIN_RETURN_DROP;
 	}
 
-	currentPosition += 1;
+	get_length(buf+currentPosition, type_size, &dataTLVSize, &length_size);
 
-	if (tlv_len_offset(buf, currentPosition, &TLVlen, &TLVlenK) != 0){
-		return PIF_PLUGIN_RETURN_DROP;
-	}
+	currentPosition += type_size + length_size;
+	dataTLVSize += type_size + length_size;
 
-	dataTLVSize = TLVlen;
-	currentPosition += TLVlenK;
 
 	for(;;){
 
-		/* Read type and length of the type */
-		if (tlv_len_offset(buf, currentPosition, &TLVlen, &TLVlenK) != 0){
-			return PIF_PLUGIN_RETURN_DROP;
-		}
+		get_type(buf+currentPosition, &type, &type_size);
+		get_length(buf+currentPosition, type_size, &length, &length_size);
+
 		/* MetaInfo and Name TLVs are also in the packets, only check for Encrypt me type */
 		/* Check if type matches encrypt me header */
-		if(TLVlen == TYPE_ENCRYPT_ME_HEADER){
+		if(type == TYPE_ENCRYPT_ME_HEADER){
+
 			/* Enter the encrypt me header */
 			int encryptMeHeaderPosition = currentPosition;
 			encrypt_me_start = buf + encryptMeHeaderPosition;
+			currentPosition += type_size + length_size + length;
 
-			encryptMeHeaderPosition += TLVlenK;
+			encryptMeHeaderPosition += type_size + length_size;
 
-			/* Jump over type field */
-			jump_over_field(buf, &encryptMeHeaderPosition, &TLVlen, &TLVlenK);
+			encryptMeTLVSize = type_size + length_size + length;
 
+			// ciphersuite
+			get_type(buf+encryptMeHeaderPosition, &type, &type_size);
+			get_length(buf+encryptMeHeaderPosition, type_size, &length, &length_size);
 
-			if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-				return PIF_PLUGIN_RETURN_DROP;
-			}
-			/* Jump over the length field */
-			encryptMeHeaderPosition += TLVlenK;
-
-			/* Get the length of the TLV */
-			if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-				return PIF_PLUGIN_RETURN_DROP;
-			}
-
-			if(TLVlen == TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE){
+			if(type == TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE){
 				/* Enter the encrypt me header cipher suite */
-				if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-						return PIF_PLUGIN_RETURN_DROP;
-				}
-				/* Jump over type field */
-				encryptMeHeaderPosition += TLVlenK;
-
-				/* Get the length of the TLV */
-				if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-					return PIF_PLUGIN_RETURN_DROP;
-				}
-
-				/* Jump over the length field */
-				encryptMeHeaderPosition += TLVlenK;
 
 				/* Extract the (ciphersuite) value from the value field*/
-				cipherSuite = extract_value_at_position(TLVlen, buf, &encryptMeHeaderPosition);
+				cipherSuite = extract_value_at_position(buf + encryptMeHeaderPosition + type_size + length_size, length);
+				encryptMeHeaderPosition += type_size + length_size + length;
+
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
 			// End of Ciphergroup TLV
 
-			/* Get the length of the TLV */
-			if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-				return PIF_PLUGIN_RETURN_DROP;
-			}
+			//keyID
+			get_type(buf+encryptMeHeaderPosition, &type, &type_size);
+			get_length(buf+encryptMeHeaderPosition, type_size, &length, &length_size);
 
-			if(TLVlen == TYPE_ENCRYPT_ME_HEADER_KEY_ID){
-				/* Jump over type field */
-				encryptMeHeaderPosition += TLVlenK;
 
-				/* Get the length of the TLV */
-				if (tlv_len_offset(buf, encryptMeHeaderPosition, &TLVlen, &TLVlenK) != 0){
-					return PIF_PLUGIN_RETURN_DROP;
-				}
+			if(type == TYPE_ENCRYPT_ME_HEADER_KEY_ID){
+				/* Enter the encrypt me header keyID*/
 
-				/* Jump over the length field */
-				encryptMeHeaderPosition += TLVlenK;
+				/* Extract the (keyID) value from the value field*/
+				keyId = extract_value_at_position(buf + encryptMeHeaderPosition + type_size + length_size, length);
+				encryptMeHeaderPosition += type_size + length_size + length;
 
-				/* Extract the (keyId) value from the value field*/
-				keyId = extract_value_at_position(TLVlen, buf, &encryptMeHeaderPosition);
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
-			start_unencrypted_content = buf + encryptMeHeaderPosition;
-			break;
-		} // End of Encrypt me TLV if
-		/* Jump over type field */
-		currentPosition += TLVlenK;
 
-		/* Get the length of the TLV */
-		if (tlv_len_offset(buf, currentPosition, &TLVlen, &TLVlenK) != 0){
-			return PIF_PLUGIN_RETURN_DROP;
+
+			start_unencrypted_content = buf + encryptMeHeaderPosition;
+			start_unencrypted_position = encryptMeHeaderPosition;
+
+			break; //exit for loop
+
 		}
-		/* Jump over the value length and length field */
-		currentPosition += TLVlen + TLVlenK;
+
+		currentPosition += type_size + length_size + length;
 
 		if(currentPosition > dataTLVSize){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
 	} // End of for loop
-	// TODO: Check if start_unencrypted_content has actually been set, could be with a boolean flag or so
-	// start_unencrypted_content
-	int content_position = 0;
 
-	/* Get the length of the content TLV */
-	if (tlv_len_offset(start_unencrypted_content, content_position, &TLVlen, &TLVlenK) != 0){
-		return PIF_PLUGIN_RETURN_DROP;
+    //find signature field
+
+	for(;;){
+
+		get_type(buf+currentPosition, &type, &type_size);
+		get_length(buf+currentPosition, type_size, &length, &length_size);
+
+		if(type == TYPE_NDN_SIGNATURE_INFO){
+			contentTLVSize = (currentPosition - start_unencrypted_position);
+		}
+
+		currentPosition += type_size + length_size + length;
+
+
+		if(currentPosition == dataTLVSize)
+			break;
+		if(currentPosition > dataTLVSize){
+			return PIF_PLUGIN_RETURN_DROP;
+		}
 	}
-
-	/* Jump over type field */
-	content_position += TLVlenK;
-
-	/* Get the length of the content TLV */
-	if (tlv_len_offset(start_unencrypted_content, content_position, &TLVlen, &TLVlenK) != 0){
-		return PIF_PLUGIN_RETURN_DROP;
-	}
-
-	contentSize = TLVlen;
-	contentTLVSize = TLVlenK + TLVlen + 1; // Calculate the end point of the content, type is always 1 byte (0x15), length of length and the length of the value
-
 
 
     // Find encrypt me header - get pointer to start
@@ -866,10 +838,6 @@ int main(){
     // Recalculate UDP checksum
     // Recalculate IP checksum
 
-	assert(keyId == 0x88);
-	assert(cipherSuite == 0x77);
-	assert(currentPosition == 45);
-	assert(dataTLVSize == 415);
 
 
 
