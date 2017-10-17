@@ -678,10 +678,6 @@ uint8_t empayload[] = {
 0xbb, 0x11, 0xdd, 0x90, 0x05};
 
 
-
-
-
-
 uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
 	int i = 0;
 	uint32_t value = 0;
@@ -699,23 +695,32 @@ int get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length
 	return(tlv_len_offset(buf, offset, length, length_size));
 }
 
-int main(){
-    int i = 0 ;
-    uint8_t* buf = empayload;
-    uint8_t* encrypt_me_start;
-    uint8_t* start_unencrypted_content;
-    uint32_t TLVlen;
-    uint8_t TLVlenK;
+typedef struct {
+
+	 uint32_t cipherSuite;
+	 uint32_t keyId;
+	 uint8_t* contentTLVStartPosition;
+	 uint32_t contentTLVSize;
+	 uint8_t* encryptMeHeaderStartPosition;
+	 uint32_t encryptMeHeaderTLVSize;
+
+
+} encrypt_me_result;
+
+
+/*
+ * Find encrypt me header - get pointer to start
+ * Find start of signature header - get pointer to start
+ * Extract cipher suite and key from encrypt me header
+ * Find end of encrypt me header - get pointer, this should be start of content
+ * Determine the range of content ( end pointer of encrypt me + 1 -- start of signature pointer)
+ * It saves these values into the encrypt_me_result struct that is passed to the method
+ * */
+int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_header){
     uint32_t currentPosition = 0;
-    uint32_t cipherSuite = 0;
-    uint32_t keyId = 0;
     uint32_t dataTLVSize = 0;
-    uint32_t contentSize = 0;
-    uint32_t contentTLVSize = 0;
-    uint32_t encryptMeTLVSize = 0;
     uint32_t start_unencrypted_position = 0;
     uint32_t type =0 , type_size =0 , length =0 , length_size = 0;
-
 
 	get_type(buf+currentPosition, &type, &type_size);
 
@@ -740,12 +745,12 @@ int main(){
 
 			/* Enter the encrypt me header */
 			int encryptMeHeaderPosition = currentPosition;
-			encrypt_me_start = buf + encryptMeHeaderPosition;
+			encrypt_me_header->encryptMeHeaderStartPosition = buf + encryptMeHeaderPosition;
 			currentPosition += type_size + length_size + length;
 
 			encryptMeHeaderPosition += type_size + length_size;
 
-			encryptMeTLVSize = type_size + length_size + length;
+			encrypt_me_header->encryptMeHeaderTLVSize = type_size + length_size + length;
 
 			// ciphersuite
 			get_type(buf+encryptMeHeaderPosition, &type, &type_size);
@@ -755,7 +760,7 @@ int main(){
 				/* Enter the encrypt me header cipher suite */
 
 				/* Extract the (ciphersuite) value from the value field*/
-				cipherSuite = extract_value_at_position(buf + encryptMeHeaderPosition + type_size + length_size, length);
+				encrypt_me_header->cipherSuite = extract_value_at_position(buf + encryptMeHeaderPosition + type_size + length_size, length);
 				encryptMeHeaderPosition += type_size + length_size + length;
 
 			} else {
@@ -770,9 +775,8 @@ int main(){
 
 			if(type == TYPE_ENCRYPT_ME_HEADER_KEY_ID){
 				/* Enter the encrypt me header keyID*/
-
 				/* Extract the (keyID) value from the value field*/
-				keyId = extract_value_at_position(buf + encryptMeHeaderPosition + type_size + length_size, length);
+				encrypt_me_header->keyId = extract_value_at_position(buf + encryptMeHeaderPosition + type_size + length_size, length);
 				encryptMeHeaderPosition += type_size + length_size + length;
 
 			} else {
@@ -780,7 +784,7 @@ int main(){
 			}
 
 
-			start_unencrypted_content = buf + encryptMeHeaderPosition;
+			encrypt_me_header->contentTLVStartPosition = buf + encryptMeHeaderPosition;
 			start_unencrypted_position = encryptMeHeaderPosition;
 
 			break; //exit for loop
@@ -794,15 +798,13 @@ int main(){
 		}
 	} // End of for loop
 
-    //find signature field
-
 	for(;;){
-
+	    //find signature field using this for loop
 		get_type(buf+currentPosition, &type, &type_size);
 		get_length(buf+currentPosition, type_size, &length, &length_size);
 
 		if(type == TYPE_NDN_SIGNATURE_INFO){
-			contentTLVSize = (currentPosition - start_unencrypted_position);
+			encrypt_me_header->contentTLVSize = (currentPosition - start_unencrypted_position);
 		}
 
 		currentPosition += type_size + length_size + length;
@@ -814,13 +816,6 @@ int main(){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
 	}
-
-
-    // Find encrypt me header - get pointer to start
-    // Find start of signature header - get pointer to start
-    // Extract cipher suite and key from encrypt me header
-    // Find end of encrypt me header - get pointer, this should be start of content
-    // Determine the range of content ( end pointer of encrypt me + 1 -- start of signature pointer)
 
     // Pre-prend IV in the output buffer + (generate IV instead of )
     // Call encrypt function with start pointer of content, length is end encrypt me pointer - start signature pointers
@@ -837,10 +832,14 @@ int main(){
     // Recalculate IP length
     // Recalculate UDP checksum
     // Recalculate IP checksum
-
-
-
-
     return 0;
 
+}
+
+int main(){
+	encrypt_me_result result;
+	if(get_encrypt_me_header_content(empayload, &result) != 0){
+		return PIF_PLUGIN_RETURN_DROP;
+	}
+	return 0;
 }
