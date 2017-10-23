@@ -22,8 +22,6 @@
 #define TYPE_NDN_SIGNATURE_INFO 0x16
 #define TYPE_NDN_SIGNATURE_VALUE 0x17
 
-
-
 #define TYPE_ENCRYPT_ME_HEADER 33000
 #define TYPE_ENCRYPT_ME_HEADER_CIPHER_SUITE 33001
 #define TYPE_ENCRYPT_ME_HEADER_KEY_ID 33002
@@ -711,6 +709,26 @@ uint8_t empayload[] = {
 };
 
 
+void mymemmove(uint8_t *to, uint8_t *from, size_t size) {
+	int i;
+
+	if(from == to){// Nothing to copy!
+		return;
+	}
+	else if(from > to)
+	{
+		for(i = 0; i < size; i++) {
+			to[i] = from[i];
+		}
+	}
+	else
+	{
+		for(i = size-1; i >= 0; i--) {
+			to[i] = from[i];
+		}
+	}
+}
+
 uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
 	int i = 0;
 	uint32_t value = 0;
@@ -730,16 +748,17 @@ int get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length
 
 typedef struct {
 
+	 uint8_t* contentTLVStartPosition;
+	 uint32_t signatureStartOffset;
+	 uint8_t* encryptMeHeaderStartPosition;
+	 uint32_t contentTLVOffset;
 	 uint32_t cipherSuite;
 	 uint32_t keyId;
-	 uint8_t* contentTLVStartPosition;
 	 uint32_t contentTLVSize;
-	 uint8_t* encryptMeHeaderStartPosition;
 	 uint32_t encryptMeHeaderTLVSize;
-
+	 uint32_t dataTLVSize;
 
 } encrypt_me_result;
-
 
 /*
  * Find encrypt me header - get pointer to start
@@ -762,10 +781,10 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 	}
 
 	get_length(buf+currentPosition, type_size, &dataTLVSize, &length_size);
+	encrypt_me_header->dataTLVSize = dataTLVSize;
 
 	currentPosition += type_size + length_size;
 	dataTLVSize += type_size + length_size;
-
 
 	for(;;){
 
@@ -815,10 +834,11 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 			} else {
 				return PIF_PLUGIN_RETURN_DROP;
 			}
-
+			// End of keyID TLV
 
 			encrypt_me_header->contentTLVStartPosition = buf + encryptMeHeaderPosition;
 			start_unencrypted_position = encryptMeHeaderPosition;
+			encrypt_me_header->contentTLVOffset = start_unencrypted_position;
 
 			break; //exit for loop
 
@@ -838,6 +858,7 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 
 		if(type == TYPE_NDN_SIGNATURE_INFO){
 			encrypt_me_header->contentTLVSize = (currentPosition - start_unencrypted_position);
+			encrypt_me_header->signatureStartOffset = currentPosition;
 		}
 
 		currentPosition += type_size + length_size + length;
@@ -858,17 +879,38 @@ int main(){
 	encrypt_me_result result;
 	int i;
 	int encryptMeOffset = 0;
-	uint32_t sizeOfContentAfterEncryption = 0;
+	int originalDataTLVSize = 0;
+	int originalContentTLVOffset = 0;
+	int amountOfPaddingBytesForEncryptedContent = 0;
+	int sizeOfEncryptMeHeaderTL = 0;
+	int contentIncreaseDueToEncryption = 0;
+	int correctedOriginal = 0;
+	uint32_t sizeOfContentTLVAfterEncryption = 0;
 
+	// Initialize the values inside the struct to 0
+	memset((uint8_t*) &result, 0, sizeof(result));
+
+	// Initialize all values in the buffer to 0
     for (i = 0; i < sizeof(buf); i++) {
     	buf[i] = 0;
     }
 
-	if(get_encrypt_me_header_content(empayload, &result) != 0){
+    // Move the payload to the buffer
+    mymemmove(buf, empayload, sizeof(empayload));
+
+    // Obtain the encrypt_me_result struct
+	if(get_encrypt_me_header_content(buf, &result) != 0){
 		return PIF_PLUGIN_RETURN_DROP;
 	}
 
-	sizeOfContentAfterEncryption =  (result.contentTLVSize % BLOCKLEN) == 0 ? result.contentTLVSize : result.contentTLVSize + BLOCKLEN - (result.contentTLVSize % BLOCKLEN);
+	// Calculate the amount of padding bytes for encryption, will always be divisible by BLOCKLEN, pad up until it is divisible
+	amountOfPaddingBytesForEncryptedContent = (result.contentTLVSize % BLOCKLEN) == 0 ? 0 : BLOCKLEN - (result.contentTLVSize % BLOCKLEN);
+
+	// Calculate the new size of the content after encryption
+	sizeOfContentTLVAfterEncryption =  result.contentTLVSize + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
+
+	// Update the length field of the Data TLV because of the encrypt me header that is inserted
+	originalDataTLVSize = result.dataTLVSize;
 
 	// Set the (T)ype value to 33003 (EncryptedContentTLV)
 	outbuf[0] = 0xfd;
@@ -877,27 +919,90 @@ int main(){
 	encryptMeOffset += 3;
 
 	// Determine the amount of bytes needed to encode the (L)ength part (EncryptedContent TLV)
-	if(sizeOfContentAfterEncryption < 253){
-		outbuf[3] = sizeOfContentAfterEncryption;
+	if(sizeOfContentTLVAfterEncryption < 253){
+		outbuf[3] = sizeOfContentTLVAfterEncryption;
 		encryptMeOffset += 1;
 	} else {
 		outbuf[3] = 0xfd;
-		outbuf[4] = (sizeOfContentAfterEncryption >> 8);
-		outbuf[5] = (sizeOfContentAfterEncryption & 0xff);
+		outbuf[4] = (sizeOfContentTLVAfterEncryption >> 8);
+		outbuf[5] = (sizeOfContentTLVAfterEncryption & 0xff);
 		encryptMeOffset += 3;
 	}
+
+	sizeOfEncryptMeHeaderTL += encryptMeOffset;
+
 	// Copy iv to the start of the output buffer
     for (i = 0; i < BLOCKLEN; i++) {
 	   outbuf[i + encryptMeOffset] = iv[i];
     }
+
+    // Compensate the offset for iv by adding BLOCKLEN
     encryptMeOffset += BLOCKLEN;
 
-    AES_CBC_encrypt_buffer((uint8_t*)(outbuf + encryptMeOffset), (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize, (uint8_t*)key,(uint8_t*) iv);
+    // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
+    contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
+    // Update the data TLV size with the amount we are going to add in the encryption proces
+	result.dataTLVSize += contentIncreaseDueToEncryption;
 
-    for (i = 0; i < sizeOfContentAfterEncryption + encryptMeOffset; i++) {
-    	printf("%02x ", outbuf[i]);
+    AES_CBC_encrypt_buffer((uint8_t*)(outbuf + encryptMeOffset), (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize, (uint8_t*) key, (uint8_t*) iv);
+
+    // Copy this state of the variable for moving over everything after the content
+    correctedOriginal = originalDataTLVSize;
+
+    // Check value for L field of the Data TLV, if encoding is increased, do make_space
+	if(result.dataTLVSize < 253 && originalDataTLVSize < 253){ // Size did not change after encryption
+		buf[1] = result.dataTLVSize;
+	} else if (result.dataTLVSize >= 253 && originalDataTLVSize < 253) { // Size has increased after encryption, make space, 2 bytes
+		result.dataTLVSize += 2;
+		correctedOriginal += 2;
+
+		buf[1] = 0xfd;
+		buf[2] = (result.dataTLVSize >> 8);
+		buf[3] = (result.dataTLVSize & 0xff);
+
+		result.contentTLVStartPosition += 2;
+		result.signatureStartOffset += 2;
+		result.encryptMeHeaderStartPosition += 2;
+		result.contentTLVOffset += 2;
+		// call make space function with 2 bytes
+		mymemmove(buf + 3, buf + 1, originalDataTLVSize - 1);
+	} else if (result.dataTLVSize >= 253 && originalDataTLVSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
+		buf[1] = 0xfd;
+		buf[2] = (result.dataTLVSize >> 8);
+		buf[3] = (result.dataTLVSize & 0xff);
+	} else { // Size of encoding has changed and became smaller, remove space from the packet, Remove space, 2 bytes, recalculate all offsets, everything is minus 2
+		result.dataTLVSize -= 2;
+		correctedOriginal -= 2;
+		buf[1] = result.dataTLVSize;
+		result.contentTLVStartPosition -= 2;
+		result.signatureStartOffset -= 2;
+		result.encryptMeHeaderStartPosition -= 2;
+		result.contentTLVOffset -= 2;
+		// call remove space function with 2 bytes
+		mymemmove(buf + 1, buf + 3, originalDataTLVSize - 1);
 	}
+
+// call make space function with contentIncreaseDueToEncryption as size
+//	make_space(result.signatureStartOffset , contentIncreaseDueToEncryption);
+	originalContentTLVOffset = result.contentTLVOffset;
+	mymemmove(buf + result.signatureStartOffset + contentIncreaseDueToEncryption, buf + result.signatureStartOffset, correctedOriginal - result.signatureStartOffset);
+
+	// The offset of the signature TLV changes due to creating space with contentIncreaseDueToEncryption as amount
+	result.signatureStartOffset += contentIncreaseDueToEncryption;
+
+	memcpy(buf + originalContentTLVOffset, outbuf, sizeOfContentTLVAfterEncryption);
+
+    for (i = 0; i < result.dataTLVSize + 1 ; i++) {
+    	if ( i % 16 == 0 ){
+    		printf("\n");
+    	}
+    	printf("%02x ", buf[i]);
+	}
+
+
+	// buf contains the entire payload
+	// outbuf contains the EncryptedContentTLV
 
     // Pre-prend IV in the output buffer + (generate IV instead of )
     // Call encrypt function with start pointer of content, length is end encrypt me pointer - start signature pointers
@@ -911,8 +1016,13 @@ int main(){
     // Done: Append the Encrypted Data TLV to the Encrypt Me header from the buffer
     // Done: Update length of Encrypt me Header
 
+    // Done: Recalculate the L field of the Data TLV
+    // Check value for L field of the Data TLV, if encoding is increased, do make_space
+    // Write new L value for data TLV
+
+
     // Recalculate Signature
-    // Recalculate the L field of the Data TLV
+
     // Recalculate UDP length
     // Recalculate IP length
     // Recalculate UDP checksum
@@ -922,4 +1032,6 @@ int main(){
 
 	return 0;
 }
-// 85 79 85 1D 28 6AAAE9E32111CB6898361C52E669896C3BEB2B1CB963BD60BD0D3260F71AC1E43AA5B65B7D6721BC6CE297CA4B3FDC5B8A234F939A12BED7B3BB2B89425D3836B09D409BE65800008BF8D7
+// 85 79 85 1D 28 6A AA E9 E3 21 11
+// CB 68 98 36 1C 52 E6 69 89 6C 3B
+// EB2B1CB963BD60BD0D3260F71AC1E43AA5B65B7D6721BC6CE297CA4B3FDC5B8A234F939A12BED7B3BB2B89425D3836B09D409BE65800008BF8 D7
