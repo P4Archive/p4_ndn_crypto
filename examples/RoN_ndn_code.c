@@ -52,6 +52,8 @@ volatile __export __mem uint32_t pif_mu_len = 0;
 static __export __ctm uint32_t count;
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
 static __export __ctm uint8_t buf[PAYLOAD_BUFFER_SIZE];
+static __export __ctm uint8_t encrypt_buf[PAYLOAD_BUFFER_SIZE];
+
 static __export __ctm uint8_t outbuf[PAYLOAD_BUFFER_SIZE+BLOCKLEN+BLOCKLEN+BUFFER_LENGTH_INCREASE+BUFFER_TYPE_INCREASE];
 
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
@@ -566,12 +568,12 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
     //printf("Step %d - %d", i/16, i);
   }
 
-  if (extra)
-  {
-    memcpy(output, input, extra);
-    state = (state_t*)output;
-    Cipher();
-  }
+//  if (extra)
+//  {
+//    memcpy(output, input, extra);
+//    state = (state_t*)output;
+//    Cipher();
+//  }
 }
 
 void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
@@ -686,12 +688,16 @@ uint8_t empayload[] = {
 	0xfd, 0x80, 0xea, 0x01, 0x88, 0x15, 0x40, 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
 	0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45,
 	0xaf, 0x8e, 0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52,
-	0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10, 0x16,
+	0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10,
+
+	0x16,
 	0x4a, 0x1b, 0x01, 0x01, 0x1c, 0x45, 0x07, 0x43, 0x08, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73,
 	0x74, 0x08, 0x07, 0x64, 0x61, 0x65, 0x6d, 0x6f, 0x6e, 0x73, 0x08, 0x0c, 0x6e, 0x64, 0x6e, 0x2d, 0x74, 0x6c,
 	0x76, 0x2d, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x03, 0x4b, 0x45, 0x59, 0x08, 0x11, 0x6b, 0x73, 0x6b, 0x2d, 0x31,
 	0x34, 0x30, 0x36, 0x34, 0x32, 0x31, 0x33, 0x38, 0x33, 0x36, 0x35, 0x33, 0x08, 0x07, 0x49, 0x44, 0x2d, 0x43,
-	0x45, 0x52, 0x54, 0x17, 0xfd, 0x01, 0x00, 0x31, 0x8b, 0x4b, 0x84, 0x50, 0xc0, 0xfa, 0x62, 0x95, 0xbb, 0x53,
+	0x45, 0x52, 0x54,
+
+	0x17, 0xfd, 0x01, 0x00, 0x31, 0x8b, 0x4b, 0x84, 0x50, 0xc0, 0xfa, 0x62, 0x95, 0xbb, 0x53,
 	0x50, 0xf7, 0xbf, 0x3d, 0xc0, 0xe5, 0xe6, 0x3d, 0x43, 0x48, 0x07, 0x30, 0x59, 0xfa, 0xd3, 0xbd, 0xad, 0x5f,
 	0x13, 0xc0, 0x9b, 0xb4, 0x69, 0xb0, 0x3b, 0x7c, 0xe7, 0xb2, 0xaf, 0xde, 0x3d, 0x05, 0x1f, 0xe3, 0xb9, 0xb7,
 	0x10, 0x92, 0x34, 0xe3, 0x82, 0x5b, 0x5f, 0x13, 0xd4, 0x18, 0xb1, 0xe6, 0xe0, 0xbf, 0x07, 0x17, 0xb0, 0x49,
@@ -756,7 +762,9 @@ typedef struct {
 	 uint32_t keyId;
 	 uint32_t contentTLVSize;
 	 uint32_t encryptMeHeaderTLVSize;
+	 uint32_t dataSize;
 	 uint32_t dataTLVSize;
+
 
 } encrypt_me_result;
 
@@ -770,7 +778,6 @@ typedef struct {
  * */
 int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_header){
     uint32_t currentPosition = 0;
-    uint32_t dataTLVSize = 0;
     uint32_t start_unencrypted_position = 0;
     uint32_t type =0 , type_size =0 , length =0 , length_size = 0;
 
@@ -780,11 +787,10 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 		return PIF_PLUGIN_RETURN_DROP;
 	}
 
-	get_length(buf+currentPosition, type_size, &dataTLVSize, &length_size);
-	encrypt_me_header->dataTLVSize = dataTLVSize;
+	get_length(buf+currentPosition, type_size, &(encrypt_me_header->dataSize), &length_size);
+	encrypt_me_header->dataTLVSize = type_size + length_size + encrypt_me_header->dataSize;
 
 	currentPosition += type_size + length_size;
-	dataTLVSize += type_size + length_size;
 
 	for(;;){
 
@@ -846,7 +852,7 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 
 		currentPosition += type_size + length_size + length;
 
-		if(currentPosition > dataTLVSize){
+		if(currentPosition > encrypt_me_header->dataTLVSize){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
 	} // End of for loop
@@ -864,9 +870,9 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 		currentPosition += type_size + length_size + length;
 
 
-		if(currentPosition == dataTLVSize)
+		if(currentPosition == encrypt_me_header->dataTLVSize)
 			break;
-		if(currentPosition > dataTLVSize){
+		if(currentPosition > encrypt_me_header->dataTLVSize){
 			return PIF_PLUGIN_RETURN_DROP;
 		}
 	}
@@ -875,11 +881,22 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 
 }
 
+void print_buf(uint8_t* buf, size_t size){
+	int i =0;
+	for (i = 0; i < size ; i++) {
+		if ( i % 16 == 0 ){
+			printf("\n");
+		}
+		printf("%02x ", buf[i]);
+	}
+	printf("\n\n");
+}
+
 int main(){
 	encrypt_me_result result;
 	int i;
 	int encryptMeOffset = 0;
-	int originalDataTLVSize = 0;
+	int originalDataSize = 0;
 	int originalContentTLVOffset = 0;
 	int amountOfPaddingBytesForEncryptedContent = 0;
 	int sizeOfEncryptMeHeaderTL = 0;
@@ -893,6 +910,10 @@ int main(){
 	// Initialize all values in the buffer to 0
     for (i = 0; i < sizeof(buf); i++) {
     	buf[i] = 0;
+    }
+
+    for (i = 0; i < sizeof(outbuf); i++) {
+    	outbuf[i] = 0;
     }
 
     // Move the payload to the buffer
@@ -910,7 +931,7 @@ int main(){
 	sizeOfContentTLVAfterEncryption =  result.contentTLVSize + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
 	// Update the length field of the Data TLV because of the encrypt me header that is inserted
-	originalDataTLVSize = result.dataTLVSize;
+	originalDataSize = result.dataTLVSize;
 
 	// Set the (T)ype value to 33003 (EncryptedContentTLV)
 	outbuf[0] = 0xfd;
@@ -928,6 +949,7 @@ int main(){
 		outbuf[5] = (sizeOfContentTLVAfterEncryption & 0xff);
 		encryptMeOffset += 3;
 	}
+	sizeOfContentTLVAfterEncryption += encryptMeOffset;
 
 	sizeOfEncryptMeHeaderTL += encryptMeOffset;
 
@@ -943,63 +965,68 @@ int main(){
     contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
     // Update the data TLV size with the amount we are going to add in the encryption proces
-	result.dataTLVSize += contentIncreaseDueToEncryption;
+	result.dataSize += contentIncreaseDueToEncryption;
 
-    AES_CBC_encrypt_buffer((uint8_t*)(outbuf + encryptMeOffset), (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize, (uint8_t*) key, (uint8_t*) iv);
+	mymemmove(encrypt_buf, (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize);
+
+    AES_CBC_encrypt_buffer((uint8_t*)(outbuf + encryptMeOffset),
+    		encrypt_buf,
+    		result.contentTLVSize,
+    		(uint8_t*) key,
+    		(uint8_t*) iv);
 
     // Copy this state of the variable for moving over everything after the content
-    correctedOriginal = originalDataTLVSize;
+    correctedOriginal = originalDataSize;
 
     // Check value for L field of the Data TLV, if encoding is increased, do make_space
-	if(result.dataTLVSize < 253 && originalDataTLVSize < 253){ // Size did not change after encryption
-		buf[1] = result.dataTLVSize;
-	} else if (result.dataTLVSize >= 253 && originalDataTLVSize < 253) { // Size has increased after encryption, make space, 2 bytes
+	if(result.dataSize < 253 && originalDataSize < 253){ // Size did not change after encryption
+		buf[1] = result.dataSize;
+	} else if (result.dataSize >= 253 && originalDataSize < 253) { // Size has increased after encryption, make space, 2 bytes
 		result.dataTLVSize += 2;
 		correctedOriginal += 2;
 
 		buf[1] = 0xfd;
-		buf[2] = (result.dataTLVSize >> 8);
-		buf[3] = (result.dataTLVSize & 0xff);
+		buf[2] = (result.dataSize >> 8);
+		buf[3] = (result.dataSize & 0xff);
 
 		result.contentTLVStartPosition += 2;
 		result.signatureStartOffset += 2;
 		result.encryptMeHeaderStartPosition += 2;
 		result.contentTLVOffset += 2;
 		// call make space function with 2 bytes
-		mymemmove(buf + 3, buf + 1, originalDataTLVSize - 1);
-	} else if (result.dataTLVSize >= 253 && originalDataTLVSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
+		mymemmove(buf + 3, buf + 1, originalDataSize - 1);
+	} else if (result.dataSize >= 253 && originalDataSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
 		buf[1] = 0xfd;
-		buf[2] = (result.dataTLVSize >> 8);
-		buf[3] = (result.dataTLVSize & 0xff);
+		buf[2] = (result.dataSize >> 8);
+		buf[3] = (result.dataSize & 0xff);
 	} else { // Size of encoding has changed and became smaller, remove space from the packet, Remove space, 2 bytes, recalculate all offsets, everything is minus 2
 		result.dataTLVSize -= 2;
 		correctedOriginal -= 2;
-		buf[1] = result.dataTLVSize;
+		buf[1] = result.dataSize;
 		result.contentTLVStartPosition -= 2;
 		result.signatureStartOffset -= 2;
 		result.encryptMeHeaderStartPosition -= 2;
 		result.contentTLVOffset -= 2;
 		// call remove space function with 2 bytes
-		mymemmove(buf + 1, buf + 3, originalDataTLVSize - 1);
+		mymemmove(buf + 1, buf + 3, originalDataSize - 1);
 	}
 
-// call make space function with contentIncreaseDueToEncryption as size
-//	make_space(result.signatureStartOffset , contentIncreaseDueToEncryption);
+	// call make space function with contentIncreaseDueToEncryption as size
+	//	make_space(result.signatureStartOffset , contentIncreaseDueToEncryption);
 	originalContentTLVOffset = result.contentTLVOffset;
-	mymemmove(buf + result.signatureStartOffset + contentIncreaseDueToEncryption, buf + result.signatureStartOffset, correctedOriginal - result.signatureStartOffset);
+
+	print_buf(buf, result.dataTLVSize);
+
+	mymemmove(buf + result.signatureStartOffset + contentIncreaseDueToEncryption,
+			buf + result.signatureStartOffset, correctedOriginal - result.signatureStartOffset);
+
 
 	// The offset of the signature TLV changes due to creating space with contentIncreaseDueToEncryption as amount
 	result.signatureStartOffset += contentIncreaseDueToEncryption;
 
 	memcpy(buf + originalContentTLVOffset, outbuf, sizeOfContentTLVAfterEncryption);
 
-    for (i = 0; i < result.dataTLVSize + 1 ; i++) {
-    	if ( i % 16 == 0 ){
-    		printf("\n");
-    	}
-    	printf("%02x ", buf[i]);
-	}
-
+	print_buf(buf, result.dataTLVSize + contentIncreaseDueToEncryption);
 
 	// buf contains the entire payload
 	// outbuf contains the EncryptedContentTLV
@@ -1028,10 +1055,5 @@ int main(){
     // Recalculate UDP checksum
     // Recalculate IP checksum
 
-
-
 	return 0;
 }
-// 85 79 85 1D 28 6A AA E9 E3 21 11
-// CB 68 98 36 1C 52 E6 69 89 6C 3B
-// EB2B1CB963BD60BD0D3260F71AC1E43AA5B65B7D6721BC6CE297CA4B3FDC5B8A234F939A12BED7B3BB2B89425D3836B09D409BE65800008BF8 D7
