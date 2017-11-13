@@ -115,7 +115,7 @@
                     "tool": "p4compiler"
                 }, 
                 ".\\C_with_P4": {
-                    "build_required": false, 
+                    "build_required": true, 
                     "list_assignments": {
                         "i32.tg0": [
                             "pif_app_nfd.list"
@@ -280,14 +280,14 @@
                     "settings": {
                         "additional_options": "-emu_cache_as_ddr.i26", 
                         "chip_name": "<unnamed>", 
-                        "debug_info": true, 
+                        "debug_info": false, 
                         "elf_64": true, 
                         "fill": "default", 
                         "fill_enable": false, 
                         "gen_mem_map_file": true, 
                         "gen_seg_h_file": false, 
                         "insert_nffwmip": true, 
-                        "insert_rt_syms": true, 
+                        "insert_rt_syms": false, 
                         "island_partial_fw_map": {
                             "i8": "catamaran", 
                             "i9": "catamaran"
@@ -389,7 +389,7 @@
                         "num_contexts": 8, 
                         "obj_target": false, 
                         "optimize": 2, 
-                        "spill_control": 3, 
+                        "spill_control": 0, 
                         "warning_level": 3
                     }, 
                     "target": "list", 
@@ -1188,16 +1188,16 @@
                         "ext_obj_files": [], 
                         "obj_files": []
                     }, 
-                    "list_type": "application", 
+                    "list_type": "user", 
                     "settings": {
-                        "additional_options": "-Qno_decl_volatile -mIPOPT_nfp=2", 
+                        "additional_options": "-Qno_decl_volatile -mIPOPT_nfp=2 -Qperfinfo=1", 
                         "alloc_microstore_size": 8192, 
                         "allow_mixing_with_other_modules": false, 
                         "asm_code_file": false, 
                         "command_line": "", 
                         "context_mode": 4, 
                         "cycle_utilization": 100, 
-                        "debug_info": true, 
+                        "debug_info": false, 
                         "define": [
                             "PIF_APP_MASTER_ME=0x204"
                         ], 
@@ -1224,7 +1224,7 @@
                         "num_contexts": 4, 
                         "obj_target": false, 
                         "optimize": 2, 
-                        "spill_control": 3, 
+                        "spill_control": 6, 
                         "warning_level": 3
                     }, 
                     "target": "list", 
@@ -1615,7 +1615,7 @@
             }
         }, 
         "project_name": "C_with_P4", 
-        "project_path": "C:\\Users\\zuraniewskipw\\NFP_SDK\\netronome_crypto\\C_with_P4.psproj", 
+        "project_path": "C:\\Users\\pannemanjj\\Documents\\Git\\netronome_crypto\\C_with_P4.psproj", 
         "sim_startup_options": {
             "imported_var_data_file": "", 
             "sim_profile_started": true, 

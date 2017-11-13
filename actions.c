@@ -3,16 +3,8 @@
 #include <nfp/me.h>
 #include <nfp/mem_atomic.h>
 #include <pif_common.h>
-//#include "aes.h"
 
 #include <string.h>
-
-#define IP_ADDR(a, b, c, d) ((a << 24) | (b << 16) | (c << 8) | d)
-
-#define CBC 1
-/*
- * Payload scan: search the payload for a string
- */
 
 #define BLOCKLEN 16 //Block length in bytes AES is 128b block only
 
@@ -31,23 +23,21 @@
 #define TYPE_ENCRYPT_ME_ENCRYPTED_CONTENT 0x80eb
 
 
-
+/* Definitions for CIpher Suite TLV*/
 #define CIPHER_SUITE_NONE 0
 #define CIPHER_SUITE_AES_128_CBC 0x77
 #define CIPHER_SUITE_AES_192_CBC 2
 #define CIPHER_SUITE_AES_256_CBC 3
+/* End of definitions for CIpher Suite TLV*/
 
 #define BUFFER_TYPE_INCREASE 3
 #define BUFFER_LENGTH_INCREASE 3
-
-#define KEY_ID 0x88
-
 
 /* Payload chunk size in LW (32-bit) and bytes */
 #define CHUNK_LW 8
 #define CHUNK_B (CHUNK_LW*4)
 
-/****************************** MACROS ******************************/
+/****************************** SHA256 MACROS ******************************/
 #define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
 #define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
 
@@ -58,11 +48,12 @@
 #define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
 #define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
 
-/****************************** MACROS ******************************/
+/****************************** END SHA256 MACROS ******************************/
 
 #define SHA256_BLOCK_SIZE 32            // SHA256 outputs a 32 byte digest
 
 
+/**************************** Definitions for Signature Info and Signature Value TLVs ****************************/
 #define SIG_VALUE_T_SIZE 1
 #define SIG_VALUE_L_SIZE 1
 #define SIG_VALUE_V_SIZE SHA256_BLOCK_SIZE
@@ -72,6 +63,7 @@
 #define SIG_INFO_SIZE (SIG_INFO_T_SIZE + SIG_INFO_L_SIZE + SIG_INFO_V_SIZE)
 #define SIG_VALUE_SIZE (SIG_VALUE_T_SIZE + SIG_VALUE_L_SIZE + SIG_VALUE_V_SIZE)
 #define NEW_SIGNATURE_SIZE (SIG_INFO_SIZE + SIG_VALUE_SIZE)
+/**************************** End of definitions for Signature Info and Signature Value TLVs ****************************/
 
 /**************************** DATA TYPES ****************************/
 
@@ -86,6 +78,22 @@ typedef struct {
 } SHA256_CTX;
 
 
+typedef struct {
+
+	 uint8_t* contentTLVStartPosition;
+	 uint32_t signatureStartOffset;
+	 uint32_t signatureInfoAndValueTLVSize;
+	 uint8_t* encryptMeHeaderStartPosition;
+	 uint32_t contentTLVOffset;
+	 uint32_t cipherSuite;
+	 uint32_t keyId;
+	 uint32_t contentTLVSize;
+	 uint32_t encryptMeHeaderTLVSize;
+	 uint32_t dataSize;
+	 uint32_t dataTLVSize;
+
+} encrypt_me_result;
+
 /* ***************************  *************************** */
 volatile __export __mem uint32_t pif_mu_len = 0;
 static __export __ctm uint32_t count;
@@ -94,12 +102,13 @@ static __export __ctm uint32_t count;
 /****************************  ****************************/
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
 static __export __ctm uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
-static __export __ctm uint8_t encrypt_input_buffer[PAYLOAD_BUFFER_SIZE];
-static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE+BLOCKLEN+BLOCKLEN+BUFFER_LENGTH_INCREASE+BUFFER_TYPE_INCREASE];
+static __export __ctm uint8_t encrypt_input_buffer[300];
+static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE + BLOCKLEN + BLOCKLEN + BUFFER_LENGTH_INCREASE + BUFFER_TYPE_INCREASE];
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+static __export __ctm SHA256_CTX sha_context;
 /* ***************************  *************************** */
 
-/* 
+/*
 This is an implementation of the AES algorithm, specifically ECB and CBC mode.
 Block size can be chosen in aes.h - available choices are AES128, AES192, AES256.
 
@@ -130,8 +139,6 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
         For AES192/256 the block size is proportionally larger.
 
 */
-
-
 
 #define Nb 4
 
@@ -168,20 +175,18 @@ typedef uint8_t state_t[4][4];
 static state_t* state;
 
 // The array that stores the round keys.
-static uint8_t RoundKey[keyExpSize];
+static __export __ctm uint8_t RoundKey[keyExpSize];
 
 // The Key input to the AES Program
 static const uint8_t* Key;
 
-#if defined(CBC) && CBC
-  // Initial Vector used only for CBC mode
-  static uint8_t* Iv;
-#endif
+// Initial Vector used only for CBC mode
+static uint8_t* Iv;
 
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
 // The numbers below can be computed dynamically trading ROM for RAM -
 // This can be useful in (embedded) bootloader applications, where ROM is often limited.
-static const uint8_t sbox[256] = {
+static __export __ctm const uint8_t sbox[256] = {
   //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
   0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
   0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -200,7 +205,7 @@ static const uint8_t sbox[256] = {
   0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
   0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
 
-static const uint8_t rsbox[256] = {
+static __export __ctm const uint8_t rsbox[256] = {
   0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
   0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
   0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
@@ -220,43 +225,11 @@ static const uint8_t rsbox[256] = {
 
 // The round constant word array, Rcon[i], contains the values given by
 // x to th e power (i-1) being powers of x (x is denoted as {02}) in the field GF(2^8)
-static const uint8_t Rcon[11] = {
+static __export __ctm const uint8_t Rcon[11] = {
   0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
 
-/*
- * Jordan Goulder points out in PR #12 (https://github.com/kokke/tiny-AES128-C/pull/12),
- * that you can remove most of the elements in the Rcon array, because they are unused.
- *
- * From Wikipedia's article on the Rijndael key schedule @ https://en.wikipedia.org/wiki/Rijndael_key_schedule#Rcon
- *
- * "Only the first some of these constants are actually used – up to rcon[10] for AES-128 (as 11 round keys are needed),
- *  up to rcon[8] for AES-192, up to rcon[7] for AES-256. rcon[0] is not used in AES algorithm."
- *
- * ... which is why the full array below has been 'disabled' below.
- */
-#if 0
-static const uint8_t Rcon[256] = {
-  0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a,
-  0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39,
-  0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a,
-  0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8,
-  0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef,
-  0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc,
-  0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b,
-  0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3,
-  0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94,
-  0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20,
-  0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35,
-  0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f,
-  0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04,
-  0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63,
-  0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd,
-  0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d };
-#endif
-
-
 /**************************** VARIABLES *****************************/
-static const WORD k[64] = {
+static __export __ctm const WORD k[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
 	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
 	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -270,7 +243,7 @@ static const WORD k[64] = {
 /*****************************************************************************/
 /* TNO functions:                                                        */
 /*****************************************************************************/
-void memset(uint8_t* s, int c, size_t n){
+void memset(uint8_t* s, uint8_t c, size_t n){
     int i =0;
     for(i = 0; i< n ; i++){
         s[i] = c;
@@ -305,10 +278,10 @@ static uint8_t getSBoxValue(uint8_t num)
   return sbox[num];
 }
 
-static uint8_t getSBoxInvert(uint8_t num)
-{
-  return rsbox[num];
-}
+//static uint8_t getSBoxInvert(uint8_t num)
+//{
+//  return rsbox[num];
+//}
 
 // This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states.
 static void KeyExpansion(void)
@@ -485,65 +458,67 @@ static uint8_t Multiply(uint8_t x, uint8_t y)
 // MixColumns function mixes the columns of the state matrix.
 // The method used to multiply may be difficult to understand for the inexperienced.
 // Please use the references to gain more information.
-static void InvMixColumns(void)
-{
-  int i;
-  uint8_t a, b, c, d;
-  for (i = 0; i < 4; ++i)
-  {
-    a = (*state)[i][0];
-    b = (*state)[i][1];
-    c = (*state)[i][2];
-    d = (*state)[i][3];
 
-    (*state)[i][0] = Multiply(a, 0x0e) ^ Multiply(b, 0x0b) ^ Multiply(c, 0x0d) ^ Multiply(d, 0x09);
-    (*state)[i][1] = Multiply(a, 0x09) ^ Multiply(b, 0x0e) ^ Multiply(c, 0x0b) ^ Multiply(d, 0x0d);
-    (*state)[i][2] = Multiply(a, 0x0d) ^ Multiply(b, 0x09) ^ Multiply(c, 0x0e) ^ Multiply(d, 0x0b);
-    (*state)[i][3] = Multiply(a, 0x0b) ^ Multiply(b, 0x0d) ^ Multiply(c, 0x09) ^ Multiply(d, 0x0e);
-  }
-}
+//static void InvMixColumns(void)
+//{
+//  int i;
+//  uint8_t a, b, c, d;
+//  for (i = 0; i < 4; ++i)
+//  {
+//    a = (*state)[i][0];
+//    b = (*state)[i][1];
+//    c = (*state)[i][2];
+//    d = (*state)[i][3];
+//
+//    (*state)[i][0] = Multiply(a, 0x0e) ^ Multiply(b, 0x0b) ^ Multiply(c, 0x0d) ^ Multiply(d, 0x09);
+//    (*state)[i][1] = Multiply(a, 0x09) ^ Multiply(b, 0x0e) ^ Multiply(c, 0x0b) ^ Multiply(d, 0x0d);
+//    (*state)[i][2] = Multiply(a, 0x0d) ^ Multiply(b, 0x09) ^ Multiply(c, 0x0e) ^ Multiply(d, 0x0b);
+//    (*state)[i][3] = Multiply(a, 0x0b) ^ Multiply(b, 0x0d) ^ Multiply(c, 0x09) ^ Multiply(d, 0x0e);
+//  }
+//}
 
 // The SubBytes Function Substitutes the values in the
 // state matrix with values in an S-box.
-static void InvSubBytes(void)
-{
-  uint8_t i,j;
-  for (i = 0; i < 4; ++i)
-  {
-    for (j = 0; j < 4; ++j)
-    {
-      (*state)[j][i] = getSBoxInvert((*state)[j][i]);
-    }
-  }
-}
 
-static void InvShiftRows(void)
-{
-  uint8_t temp;
+//static void InvSubBytes(void)
+//{
+//  uint8_t i,j;
+//  for (i = 0; i < 4; ++i)
+//  {
+//    for (j = 0; j < 4; ++j)
+//    {
+//      (*state)[j][i] = getSBoxInvert((*state)[j][i]);
+//    }
+//  }
+//}
 
-  // Rotate first row 1 columns to right
-  temp = (*state)[3][1];
-  (*state)[3][1] = (*state)[2][1];
-  (*state)[2][1] = (*state)[1][1];
-  (*state)[1][1] = (*state)[0][1];
-  (*state)[0][1] = temp;
-
-  // Rotate second row 2 columns to right
-  temp = (*state)[0][2];
-  (*state)[0][2] = (*state)[2][2];
-  (*state)[2][2] = temp;
-
-  temp = (*state)[1][2];
-  (*state)[1][2] = (*state)[3][2];
-  (*state)[3][2] = temp;
-
-  // Rotate third row 3 columns to right
-  temp = (*state)[0][3];
-  (*state)[0][3] = (*state)[1][3];
-  (*state)[1][3] = (*state)[2][3];
-  (*state)[2][3] = (*state)[3][3];
-  (*state)[3][3] = temp;
-}
+//static void InvShiftRows(void)
+//{
+//  uint8_t temp;
+//
+//  // Rotate first row 1 columns to right
+//  temp = (*state)[3][1];
+//  (*state)[3][1] = (*state)[2][1];
+//  (*state)[2][1] = (*state)[1][1];
+//  (*state)[1][1] = (*state)[0][1];
+//  (*state)[0][1] = temp;
+//
+//  // Rotate second row 2 columns to right
+//  temp = (*state)[0][2];
+//  (*state)[0][2] = (*state)[2][2];
+//  (*state)[2][2] = temp;
+//
+//  temp = (*state)[1][2];
+//  (*state)[1][2] = (*state)[3][2];
+//  (*state)[3][2] = temp;
+//
+//  // Rotate third row 3 columns to right
+//  temp = (*state)[0][3];
+//  (*state)[0][3] = (*state)[1][3];
+//  (*state)[1][3] = (*state)[2][3];
+//  (*state)[2][3] = (*state)[3][3];
+//  (*state)[3][3] = temp;
+//}
 
 // Cipher is the main function that encrypts the PlainText.
 static void Cipher(void)
@@ -571,37 +546,34 @@ static void Cipher(void)
   AddRoundKey(Nr);
 }
 
-static void InvCipher(void)
-{
-  uint8_t round=0;
-
-  // Add the First round key to the state before starting the rounds.
-  AddRoundKey(Nr);
-
-  // There will be Nr rounds.
-  // The first Nr-1 rounds are identical.
-  // These Nr-1 rounds are executed in the loop below.
-  for (round = (Nr - 1); round > 0; --round)
-  {
-    InvShiftRows();
-    InvSubBytes();
-    AddRoundKey(round);
-    InvMixColumns();
-  }
-
-  // The last round is given below.
-  // The MixColumns function is not here in the last round.
-  InvShiftRows();
-  InvSubBytes();
-  AddRoundKey(0);
-}
+//static void InvCipher(void)
+//{
+//  uint8_t round=0;
+//
+//  // Add the First round key to the state before starting the rounds.
+//  AddRoundKey(Nr);
+//
+//  // There will be Nr rounds.
+//  // The first Nr-1 rounds are identical.
+//  // These Nr-1 rounds are executed in the loop below.
+//  for (round = (Nr - 1); round > 0; --round)
+//  {
+//    InvShiftRows();
+//    InvSubBytes();
+//    AddRoundKey(round);
+//    InvMixColumns();
+//  }
+//
+//  // The last round is given below.
+//  // The MixColumns function is not here in the last round.
+//  InvShiftRows();
+//  InvSubBytes();
+//  AddRoundKey(0);
+//}
 
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
-#if defined(CBC) && (CBC == 1)
-
-
 static void XorWithIv(uint8_t* buf)
 {
   uint8_t i;
@@ -613,9 +585,7 @@ static void XorWithIv(uint8_t* buf)
 
 void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
 {
-  //uintptr_t i; // This type is not usable in Programmer Studio Environment, use standard uint32_t instead
   uint32_t i;
-  //uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
 
   // Skip the key expansion if key is passed as 0
   if (0 != key)
@@ -642,44 +612,42 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 
 }
 
-void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
-{
-  uint32_t i;
-  uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
-
-  // Skip the key expansion if key is passed as 0
-  if (0 != key)
-  {
-    Key = key;
-    KeyExpansion();
-  }
-
-  // If iv is passed as 0, we continue to encrypt without re-setting the Iv
-  if (iv != 0)
-  {
-    Iv = (uint8_t*)iv;
-  }
-
-  for (i = 0; i < length; i += BLOCKLEN)
-  {
-    mymemmove(output, input, BLOCKLEN);
-    state = (state_t*)output;
-    InvCipher();
-    XorWithIv(output);
-    Iv = input;
-    input += BLOCKLEN;
-    output += BLOCKLEN;
-  }
-
-  if (extra)
-  {
-    mymemmove(output, input, extra);
-    state = (state_t*)output;
-    InvCipher();
-  }
-}
-
-#endif // #if defined(CBC) && (CBC == 1)
+//void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
+//{
+//  uint32_t i;
+//  uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
+//
+//  // Skip the key expansion if key is passed as 0
+//  if (0 != key)
+//  {
+//    Key = key;
+//    KeyExpansion();
+//  }
+//
+//  // If iv is passed as 0, we continue to encrypt without re-setting the Iv
+//  if (iv != 0)
+//  {
+//    Iv = (uint8_t*)iv;
+//  }
+//
+//  for (i = 0; i < length; i += BLOCKLEN)
+//  {
+//    mymemmove(output, input, BLOCKLEN);
+//    state = (state_t*)output;
+//    InvCipher();
+//    XorWithIv(output);
+//    Iv = input;
+//    input += BLOCKLEN;
+//    output += BLOCKLEN;
+//  }
+//
+//  if (extra)
+//  {
+//    mymemmove(output, input, extra);
+//    state = (state_t*)output;
+//    InvCipher();
+//  }
+//}
 
 /* SHA Functions*/
 void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
@@ -769,7 +737,7 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 		while (i < 64)
 			ctx->data[i++] = 0x00;
 		sha256_transform(ctx, ctx->data);
-		memset(ctx->data, 0, 56);
+	//	memset(ctx->data, 0, 56); UNCOMMENT
 	}
 
 	// Append to the padding the total message's length in bits and transform.
@@ -798,17 +766,17 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 	}
 }
 
-/* End of SHA functions */ 
+/* End of SHA functions */
 
-static int tlv_len_offset(uint8_t *buff, int currpos, uint64_t *TLVlen, uint8_t *TLVlenK){
+static int tlv_len_offset(uint8_t *buff, int currpos, uint32_t *TLVlen, uint32_t *TLVlenK){
 	uint8_t len0 = buff[currpos++]; //get length and advance
-	uint64_t len = 0;
+	uint32_t len = 0;
 	uint8_t lenK = 1;
     uint8_t i = 0;
 
-	if (len0<253){
+	if (len0 < 253){
 		len = len0;
-    }
+	}
 	else {
 		//length encoded in following 2,4,or 8 octets
 		switch (len0){
@@ -822,8 +790,7 @@ static int tlv_len_offset(uint8_t *buff, int currpos, uint64_t *TLVlen, uint8_t 
     			lenK = 8;
     			break;
     		default :
-    			//printf("wrong ndn datagram format!\n");
-    			return (-1);
+    			return -1;
 
 		}
 		for(i=0; i < lenK; i++){
@@ -833,7 +800,7 @@ static int tlv_len_offset(uint8_t *buff, int currpos, uint64_t *TLVlen, uint8_t 
 	}
 	*TLVlen = len;
 	*TLVlenK = lenK;
-	return(0);
+	return 0;
 }
 
 uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
@@ -852,23 +819,6 @@ int get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
 int get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length_size){
 	return(tlv_len_offset(buf, offset, length, length_size));
 }
-
-typedef struct {
-
-	 uint8_t* contentTLVStartPosition;
-	 uint32_t signatureStartOffset;
-	 uint32_t signatureInfoAndValueTLVSize;
-	 uint8_t* encryptMeHeaderStartPosition;
-	 uint32_t contentTLVOffset;
-	 uint32_t cipherSuite;
-	 uint32_t keyId;
-	 uint32_t contentTLVSize;
-	 uint32_t encryptMeHeaderTLVSize;
-	 uint32_t dataSize;
-	 uint32_t dataTLVSize;
-
-} encrypt_me_result;
-
 
 int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_header){
     uint32_t currentPosition = 0;
@@ -973,32 +923,32 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
                             MATCH_DATA_T *match_data){
-    __mem uint8_t *payload; 
+    __mem uint8_t *payload;
     uint32_t mu_len, ctm_len;
-    PIF_PLUGIN_udp_T *udp; 
-    PIF_PLUGIN_ipv4_T *ipv4; 
-    int length, outlength, length_inc;
+    PIF_PLUGIN_udp_T *udp;
+    PIF_PLUGIN_ipv4_T *ipv4;
+    uint16_t length;
+    short length_inc;
 
 	encrypt_me_result result;
-	SHA256_CTX sha_context;
-	int encryptMeOffset = 0;
+	uint16_t encryptMeOffset = 0;
     int i;
-	int originalDataSize = 0;
-	int originalContentTLVOffset = 0;
-	int amountOfPaddingBytesForEncryptedContent = 0;
-	int sizeOfEncryptMeHeaderTL = 0;
-	int contentIncreaseDueToEncryption = 0;
-	int correctedOriginalDataSize = 0;
-	uint32_t sizeOfContentTLVAfterEncryption = 0;
-	int signatureTLVSize = 0;
-	int signatureTLVSizeDifference = 0;
-	int dataTLVValueStartOffset = 0;
+    uint16_t originalDataSize = 0;
+    uint16_t originalContentTLVOffset = 0;
+    uint16_t amountOfPaddingBytesForEncryptedContent = 0;
+    uint16_t sizeOfEncryptMeHeaderTL = 0;
+    uint16_t contentIncreaseDueToEncryption = 0;
+    uint16_t correctedOriginalDataSize = 0;
+	uint16_t sizeOfContentTLVAfterEncryption = 0;
+	uint16_t signatureTLVSize = 0;
+	short signatureTLVSizeDifference = 0;
+	uint16_t dataTLVValueStartOffset = 0;
 
 
     memset((uint8_t *) &result, 0, sizeof(result));
 
-    ipv4 = pif_plugin_hdr_get_ipv4(headers); 
-    
+    ipv4 = pif_plugin_hdr_get_ipv4(headers);
+
     if(ipv4->mf_flag == 1){
         return PIF_PLUGIN_RETURN_DROP;
     }
@@ -1040,16 +990,16 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     if (mu_len) {
         payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
         /* Adjust payload size depending on the ctm size for the packet */
-        payload += 256 << pif_pkt_info_global.ctm_size;        
+        payload += 256 << pif_pkt_info_global.ctm_size;
         count = mu_len;
         for (i = 0; i < count; i++) {
            packet_buffer[length+i]=payload[i];
         }
-        length=length+count;    
+        length=length+count;
     }
 
 
-    if(get_encrypt_me_header_content(packet_buffer, &result) != 0){
+    if(get_encrypt_me_header_content((uint8_t *)packet_buffer, &result) != 0){
     		return PIF_PLUGIN_RETURN_DROP;
    	}
 
@@ -1107,10 +1057,10 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	result.dataSize += contentIncreaseDueToEncryption;
 	result.dataTLVSize += contentIncreaseDueToEncryption;
 
-	mymemmove(encrypt_input_buffer, (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize);
+	mymemmove((uint8_t *)encrypt_input_buffer, (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize);
 
     AES_CBC_encrypt_buffer((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
-    		encrypt_input_buffer,
+    		(uint8_t *) encrypt_input_buffer,
     		result.contentTLVSize,
     		(uint8_t*) key,
     		(uint8_t*) iv);
@@ -1134,7 +1084,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 		result.contentTLVOffset += 2;
 		dataTLVValueStartOffset = 4;
 		// call make space function with 2 bytes
-		mymemmove(packet_buffer + 3, packet_buffer + 1, originalDataSize - 1);
+		mymemmove((uint8_t *) (packet_buffer + 3), (uint8_t *)(packet_buffer + 1), originalDataSize - 1);
 	} else if (result.dataSize >= 253 && originalDataSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
 		packet_buffer[1] = 0xfd;
 		packet_buffer[2] = (result.dataSize >> 8);
@@ -1149,7 +1099,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 		result.encryptMeHeaderStartPosition -= 2;
 		result.contentTLVOffset -= 2;
 		dataTLVValueStartOffset = 2; // One for Type, One of Length
-		mymemmove(packet_buffer + 2, packet_buffer + 4, originalDataSize - 2); 		// call remove space function with 2 bytes
+		mymemmove((uint8_t *)(packet_buffer + 2),(uint8_t *) (packet_buffer + 4), originalDataSize - 2); 		// call remove space function with 2 bytes
 	}
 
 	// call make space function with contentIncreaseDueToEncryption as size
@@ -1157,14 +1107,14 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	originalContentTLVOffset = result.contentTLVOffset;
 
 	// Move the signature
-	mymemmove(packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption,
-			packet_buffer + result.signatureStartOffset, correctedOriginalDataSize - result.signatureStartOffset);
+	mymemmove((uint8_t *)(packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption),
+			(uint8_t *)(packet_buffer + result.signatureStartOffset), correctedOriginalDataSize - result.signatureStartOffset);
 
 	// The offset of the signature TLV changes due to creating space with contentIncreaseDueToEncryption as amount
 	result.signatureStartOffset += contentIncreaseDueToEncryption;
 
 	// Copy encrypted content into the packet buffer
-	mymemmove(packet_buffer + originalContentTLVOffset, encrypt_me_tlv_buffer, sizeOfContentTLVAfterEncryption);
+	mymemmove((uint8_t *)(packet_buffer + originalContentTLVOffset), (uint8_t *) (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
 
 	// Construct Signature Info TLV (Type=0x16, Length=0x3)
 	packet_buffer[result.signatureStartOffset] = 0x16;
@@ -1178,18 +1128,18 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
-	sha256_init(&sha_context);
-	sha256_update(&sha_context, packet_buffer + dataTLVValueStartOffset, result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
-	sha256_final(&sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
+	sha256_init((SHA256_CTX*) &sha_context);
+	sha256_update((SHA256_CTX*) &sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
+	sha256_final((SHA256_CTX*) &sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
 
-    
+
     length_inc = result.dataTLVSize - length;
     if(length_inc > 0) {
         pif_pkt_make_space(result.signatureStartOffset, length_inc); // Make space, packet has increased in size
     } else if (length_inc < 0) {
         pif_pkt_free_space(result.signatureStartOffset, -length_inc); // Remove space, since packet has decreased in size
-    } 
-    
+    }
+
     if (pif_pkt_info_global.split) { /* payload split to MU */
         uint32_t sop; /* start of packet offset */
         sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
@@ -1215,7 +1165,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     if (mu_len) {
         payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
         /* Adjust payload size depending on the ctm size for the packet */
-        payload += 256 << pif_pkt_info_global.ctm_size;        
+        payload += 256 << pif_pkt_info_global.ctm_size;
         count = mu_len;
         for (i = 0; i < count; i++) {
            payload[i]=packet_buffer[length+i];
@@ -1225,7 +1175,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     ipv4->totalLen += length_inc;
 
 
-    udp = pif_plugin_hdr_get_udp(headers); 
+    udp = pif_plugin_hdr_get_udp(headers);
     udp->len += length_inc;
     return PIF_PLUGIN_RETURN_FORWARD;
 
