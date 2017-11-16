@@ -773,6 +773,9 @@ int get_encrypt_me_header_content(uint8_t* buf, __mem encrypt_me_result *encrypt
 
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
                             MATCH_DATA_T *match_data){
+
+
+
     __mem uint8_t *payload;
     uint32_t mu_len, ctm_len;
     PIF_PLUGIN_udp_T *udp;
@@ -780,7 +783,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     uint16_t length;
     short length_inc;
 
-	__mem encrypt_me_result result; // = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	__mem encrypt_me_result result = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	__lmem uint16_t encryptMeOffset = 0;
     int i;
     uint16_t originalDataSize = 0;
