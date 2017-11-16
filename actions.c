@@ -3,6 +3,7 @@
 #include <nfp/me.h>
 #include <nfp/mem_atomic.h>
 #include <pif_common.h>
+#include <memory.h>
 
 #include <string.h>
 
@@ -65,10 +66,13 @@
 #define NEW_SIGNATURE_SIZE (SIG_INFO_SIZE + SIG_VALUE_SIZE)
 /**************************** End of definitions for Signature Info and Signature Value TLVs ****************************/
 
+
 /**************************** DATA TYPES ****************************/
+
 
 typedef unsigned char BYTE;             // 8-bit byte
 typedef unsigned int  WORD;             // 32-bit word, change to "long" for 16-bit machines
+
 
 typedef struct {
 	BYTE data[64];
@@ -79,7 +83,6 @@ typedef struct {
 
 
 typedef struct {
-
 	 uint8_t* contentTLVStartPosition;
 	 uint32_t signatureStartOffset;
 	 uint32_t signatureInfoAndValueTLVSize;
@@ -105,7 +108,8 @@ static __export __ctm uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
 static __export __ctm uint8_t encrypt_input_buffer[300];
 static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE + BLOCKLEN + BLOCKLEN + BUFFER_LENGTH_INCREASE + BUFFER_TYPE_INCREASE];
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
-static __export __ctm SHA256_CTX sha_context;
+static __export __mem SHA256_CTX sha_context;
+
 /* ***************************  *************************** */
 
 /*
@@ -241,15 +245,8 @@ static __export __ctm const WORD k[64] = {
 };
 
 /*****************************************************************************/
-/* TNO functions:                                                        */
+/* TNO functions:                                                           */
 /*****************************************************************************/
-void memset(uint8_t* s, uint8_t c, size_t n){
-    int i =0;
-    for(i = 0; i< n ; i++){
-        s[i] = c;
-    }
-}
-
 void mymemmove(uint8_t *to, uint8_t *from, size_t size) {
 	int i;
 
@@ -650,9 +647,9 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 //}
 
 /* SHA Functions*/
-void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
+void sha256_transform(__mem SHA256_CTX *ctx, __mem const BYTE data[])
 {
-	WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+	__mem WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
 
 	for (i = 0, j = 0; i < 16; ++i, j += 4)
 		m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
@@ -691,7 +688,7 @@ void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
 	ctx->state[7] += h;
 }
 
-void sha256_init(SHA256_CTX *ctx)
+void sha256_init(__mem SHA256_CTX *ctx)
 {
 	ctx->datalen = 0;
 	ctx->bitlen = 0;
@@ -705,7 +702,7 @@ void sha256_init(SHA256_CTX *ctx)
 	ctx->state[7] = 0x5be0cd19;
 }
 
-void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
+void sha256_update(__mem SHA256_CTX *ctx, __mem const BYTE data[], size_t len)
 {
 	WORD i;
 
@@ -720,9 +717,9 @@ void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
 	}
 }
 
-void sha256_final(SHA256_CTX *ctx, BYTE hash[])
+void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 {
-	WORD i;
+	__mem WORD i;
 
 	i = ctx->datalen;
 
@@ -737,7 +734,7 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 		while (i < 64)
 			ctx->data[i++] = 0x00;
 		sha256_transform(ctx, ctx->data);
-	//	memset(ctx->data, 0, 56); UNCOMMENT
+		memset_mem(ctx->data, 0, 56); 
 	}
 
 	// Append to the padding the total message's length in bits and transform.
@@ -768,7 +765,7 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 
 /* End of SHA functions */
 
-static int tlv_len_offset(uint8_t *buff, int currpos, uint32_t *TLVlen, uint32_t *TLVlenK){
+static int tlv_len_offset(uint8_t *buff, int currpos, __mem uint32_t *TLVlen, __mem uint32_t *TLVlenK){
 	uint8_t len0 = buff[currpos++]; //get length and advance
 	uint32_t len = 0;
 	uint8_t lenK = 1;
@@ -812,18 +809,18 @@ uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
 	return value;
 }
 
-int get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
+int get_type(uint8_t* buf, __mem uint32_t *type, __mem uint32_t *type_size){
 	return(tlv_len_offset(buf, 0, type, type_size));
 }
 
-int get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length_size){
+int get_length(uint8_t* buf, uint32_t offset, __mem uint32_t *length, __mem uint32_t *length_size){
 	return(tlv_len_offset(buf, offset, length, length_size));
 }
 
-int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_header){
+int get_encrypt_me_header_content(uint8_t* buf, __mem encrypt_me_result *encrypt_me_header){
     uint32_t currentPosition = 0;
     uint32_t start_unencrypted_position = 0;
-    uint32_t type =0 , type_size =0 , length =0 , length_size = 0;
+    __mem uint32_t type =0 , type_size =0  , length_size = 0, length =0;
 
 	get_type(buf+currentPosition, &type, &type_size);
 
@@ -831,7 +828,7 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 		return PIF_PLUGIN_RETURN_DROP;
 	}
 
-	get_length(buf+currentPosition, type_size, &(encrypt_me_header->dataSize), &length_size);
+	get_length(buf + currentPosition, type_size, &(encrypt_me_header->dataSize), &length_size);
 	encrypt_me_header->dataTLVSize = type_size + length_size + encrypt_me_header->dataSize;
 
 	currentPosition += type_size + length_size;
@@ -930,8 +927,8 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     uint16_t length;
     short length_inc;
 
-	encrypt_me_result result;
-	uint16_t encryptMeOffset = 0;
+	__mem encrypt_me_result result; // = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	__lmem uint16_t encryptMeOffset = 0;
     int i;
     uint16_t originalDataSize = 0;
     uint16_t originalContentTLVOffset = 0;
@@ -943,9 +940,6 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	uint16_t signatureTLVSize = 0;
 	short signatureTLVSizeDifference = 0;
 	uint16_t dataTLVValueStartOffset = 0;
-
-
-    memset((uint8_t *) &result, 0, sizeof(result));
 
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
 
@@ -1114,7 +1108,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	result.signatureStartOffset += contentIncreaseDueToEncryption;
 
 	// Copy encrypted content into the packet buffer
-	mymemmove((uint8_t *)(packet_buffer + originalContentTLVOffset), (uint8_t *) (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
+	memmove_mem_mem((uint8_t *)(packet_buffer + originalContentTLVOffset), (uint8_t *) (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
 
 	// Construct Signature Info TLV (Type=0x16, Length=0x3)
 	packet_buffer[result.signatureStartOffset] = 0x16;
@@ -1128,9 +1122,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
-	sha256_init((SHA256_CTX*) &sha_context);
-	sha256_update((SHA256_CTX*) &sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
-	sha256_final((SHA256_CTX*) &sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
+	sha256_init(&sha_context);
+	sha256_update(&sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
+	sha256_final(&sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
 
 
     length_inc = result.dataTLVSize - length;
