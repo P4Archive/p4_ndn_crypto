@@ -185,7 +185,7 @@ static __export __ctm uint8_t RoundKey[keyExpSize];
 static const uint8_t* Key;
 
 // Initial Vector used only for CBC mode
-static uint8_t* Iv;
+static __mem uint8_t* Iv;
 
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
 // The numbers below can be computed dynamically trading ROM for RAM -
@@ -243,29 +243,6 @@ static __export __ctm const WORD k[64] = {
 	0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
 	0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
-
-/*****************************************************************************/
-/* TNO functions:                                                           */
-/*****************************************************************************/
-void mymemmove(uint8_t *to, uint8_t *from, size_t size) {
-	int i;
-
-	if(from == to){// Nothing to copy!
-		return;
-	}
-	else if(from > to)
-	{
-		for(i = 0; i < size; i++) {
-			to[i] = from[i];
-		}
-	}
-	else
-	{
-		for(i = size-1; i >= 0; i--) {
-			to[i] = from[i];
-		}
-	}
-}
 
 /*****************************************************************************/
 /* Private functions:                                                        */
@@ -452,71 +429,6 @@ static uint8_t Multiply(uint8_t x, uint8_t y)
 
 #endif
 
-// MixColumns function mixes the columns of the state matrix.
-// The method used to multiply may be difficult to understand for the inexperienced.
-// Please use the references to gain more information.
-
-//static void InvMixColumns(void)
-//{
-//  int i;
-//  uint8_t a, b, c, d;
-//  for (i = 0; i < 4; ++i)
-//  {
-//    a = (*state)[i][0];
-//    b = (*state)[i][1];
-//    c = (*state)[i][2];
-//    d = (*state)[i][3];
-//
-//    (*state)[i][0] = Multiply(a, 0x0e) ^ Multiply(b, 0x0b) ^ Multiply(c, 0x0d) ^ Multiply(d, 0x09);
-//    (*state)[i][1] = Multiply(a, 0x09) ^ Multiply(b, 0x0e) ^ Multiply(c, 0x0b) ^ Multiply(d, 0x0d);
-//    (*state)[i][2] = Multiply(a, 0x0d) ^ Multiply(b, 0x09) ^ Multiply(c, 0x0e) ^ Multiply(d, 0x0b);
-//    (*state)[i][3] = Multiply(a, 0x0b) ^ Multiply(b, 0x0d) ^ Multiply(c, 0x09) ^ Multiply(d, 0x0e);
-//  }
-//}
-
-// The SubBytes Function Substitutes the values in the
-// state matrix with values in an S-box.
-
-//static void InvSubBytes(void)
-//{
-//  uint8_t i,j;
-//  for (i = 0; i < 4; ++i)
-//  {
-//    for (j = 0; j < 4; ++j)
-//    {
-//      (*state)[j][i] = getSBoxInvert((*state)[j][i]);
-//    }
-//  }
-//}
-
-//static void InvShiftRows(void)
-//{
-//  uint8_t temp;
-//
-//  // Rotate first row 1 columns to right
-//  temp = (*state)[3][1];
-//  (*state)[3][1] = (*state)[2][1];
-//  (*state)[2][1] = (*state)[1][1];
-//  (*state)[1][1] = (*state)[0][1];
-//  (*state)[0][1] = temp;
-//
-//  // Rotate second row 2 columns to right
-//  temp = (*state)[0][2];
-//  (*state)[0][2] = (*state)[2][2];
-//  (*state)[2][2] = temp;
-//
-//  temp = (*state)[1][2];
-//  (*state)[1][2] = (*state)[3][2];
-//  (*state)[3][2] = temp;
-//
-//  // Rotate third row 3 columns to right
-//  temp = (*state)[0][3];
-//  (*state)[0][3] = (*state)[1][3];
-//  (*state)[1][3] = (*state)[2][3];
-//  (*state)[2][3] = (*state)[3][3];
-//  (*state)[3][3] = temp;
-//}
-
 // Cipher is the main function that encrypts the PlainText.
 static void Cipher(void)
 {
@@ -543,35 +455,12 @@ static void Cipher(void)
   AddRoundKey(Nr);
 }
 
-//static void InvCipher(void)
-//{
-//  uint8_t round=0;
-//
-//  // Add the First round key to the state before starting the rounds.
-//  AddRoundKey(Nr);
-//
-//  // There will be Nr rounds.
-//  // The first Nr-1 rounds are identical.
-//  // These Nr-1 rounds are executed in the loop below.
-//  for (round = (Nr - 1); round > 0; --round)
-//  {
-//    InvShiftRows();
-//    InvSubBytes();
-//    AddRoundKey(round);
-//    InvMixColumns();
-//  }
-//
-//  // The last round is given below.
-//  // The MixColumns function is not here in the last round.
-//  InvShiftRows();
-//  InvSubBytes();
-//  AddRoundKey(0);
-//}
+
 
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
-static void XorWithIv(uint8_t* buf)
+static void XorWithIv(__mem uint8_t* buf)
 {
   uint8_t i;
   for (i = 0; i < BLOCKLEN; ++i) //WAS for(i = 0; i < KEYLEN; ++i) but the block in AES is always 128bit so 16 bytes!
@@ -580,7 +469,7 @@ static void XorWithIv(uint8_t* buf)
   }
 }
 
-void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
+void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_t length, const uint8_t* key, __mem const uint8_t* iv)
 {
   uint32_t i;
 
@@ -599,7 +488,7 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
   for (i = 0; i < length; i += BLOCKLEN)
   {
     XorWithIv(input);
-    mymemmove(output, input, BLOCKLEN);
+    memmove_mem_mem(output, input, BLOCKLEN);
     state = (state_t*)output;
     Cipher();
     Iv = output;
@@ -609,42 +498,6 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 
 }
 
-//void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
-//{
-//  uint32_t i;
-//  uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
-//
-//  // Skip the key expansion if key is passed as 0
-//  if (0 != key)
-//  {
-//    Key = key;
-//    KeyExpansion();
-//  }
-//
-//  // If iv is passed as 0, we continue to encrypt without re-setting the Iv
-//  if (iv != 0)
-//  {
-//    Iv = (uint8_t*)iv;
-//  }
-//
-//  for (i = 0; i < length; i += BLOCKLEN)
-//  {
-//    mymemmove(output, input, BLOCKLEN);
-//    state = (state_t*)output;
-//    InvCipher();
-//    XorWithIv(output);
-//    Iv = input;
-//    input += BLOCKLEN;
-//    output += BLOCKLEN;
-//  }
-//
-//  if (extra)
-//  {
-//    mymemmove(output, input, extra);
-//    state = (state_t*)output;
-//    InvCipher();
-//  }
-//}
 
 /* SHA Functions*/
 void sha256_transform(__mem SHA256_CTX *ctx, __mem const BYTE data[])
@@ -1051,7 +904,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	result.dataSize += contentIncreaseDueToEncryption;
 	result.dataTLVSize += contentIncreaseDueToEncryption;
 
-	mymemmove((uint8_t *)encrypt_input_buffer, (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize);
+	memmove_mem_mem(encrypt_input_buffer, result.contentTLVStartPosition, result.contentTLVSize);
 
     AES_CBC_encrypt_buffer((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
     		(uint8_t *) encrypt_input_buffer,
@@ -1078,7 +931,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 		result.contentTLVOffset += 2;
 		dataTLVValueStartOffset = 4;
 		// call make space function with 2 bytes
-		mymemmove((uint8_t *) (packet_buffer + 3), (uint8_t *)(packet_buffer + 1), originalDataSize - 1);
+		memmove_mem_mem(packet_buffer + 3, packet_buffer + 1, originalDataSize - 1);
 	} else if (result.dataSize >= 253 && originalDataSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
 		packet_buffer[1] = 0xfd;
 		packet_buffer[2] = (result.dataSize >> 8);
@@ -1093,7 +946,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 		result.encryptMeHeaderStartPosition -= 2;
 		result.contentTLVOffset -= 2;
 		dataTLVValueStartOffset = 2; // One for Type, One of Length
-		mymemmove((uint8_t *)(packet_buffer + 2),(uint8_t *) (packet_buffer + 4), originalDataSize - 2); 		// call remove space function with 2 bytes
+		memmove_mem_mem((packet_buffer + 2),(packet_buffer + 4), originalDataSize - 2); // call remove space function with 2 bytes
 	}
 
 	// call make space function with contentIncreaseDueToEncryption as size
@@ -1101,14 +954,14 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	originalContentTLVOffset = result.contentTLVOffset;
 
 	// Move the signature
-	mymemmove((uint8_t *)(packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption),
-			(uint8_t *)(packet_buffer + result.signatureStartOffset), correctedOriginalDataSize - result.signatureStartOffset);
+	memmove_mem_mem((packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption),
+			(packet_buffer + result.signatureStartOffset), correctedOriginalDataSize - result.signatureStartOffset);
 
 	// The offset of the signature TLV changes due to creating space with contentIncreaseDueToEncryption as amount
 	result.signatureStartOffset += contentIncreaseDueToEncryption;
 
 	// Copy encrypted content into the packet buffer
-	memmove_mem_mem((uint8_t *)(packet_buffer + originalContentTLVOffset), (uint8_t *) (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
+	memmove_mem_mem((packet_buffer + originalContentTLVOffset), (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
 
 	// Construct Signature Info TLV (Type=0x16, Length=0x3)
 	packet_buffer[result.signatureStartOffset] = 0x16;
