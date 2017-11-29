@@ -1,13 +1,28 @@
-#include <assert.h>
-#include <stdio.h>
+#define ECLIPSE
+
+#ifndef ECLIPSE
+#include <pif_plugin.h>
+#include <nfp/me.h>
+#include <nfp/mem_atomic.h>
+#include <pif_common.h>
+#include <memory.h>
+#endif
 
 #include <stdint.h>
 #include <string.h>
 
-#define CBC 1
-/*
- * Payload scan: search the payload for a string
- */
+#ifdef ECLIPSE
+#include <stdio.h>
+#define __ctm
+#define __export
+#define __mem
+#define __lmem
+#define PIF_PLUGIN_RETURN_DROP 1
+#define PIF_PLUGIN_RETURN_FORWARD 0
+#define memset_mem memset
+#define memmove_mem_mem memmove
+#endif
+
 
 #define BLOCKLEN 16 //Block length in bytes AES is 128b block only
 
@@ -25,28 +40,23 @@
 #define TYPE_ENCRYPT_ME_HEADER_KEY_ID 33002
 #define TYPE_ENCRYPT_ME_ENCRYPTED_CONTENT 0x80eb
 
+
+/* Definitions for CIpher Suite TLV*/
 #define CIPHER_SUITE_NONE 0
 #define CIPHER_SUITE_AES_128_CBC 0x77
 #define CIPHER_SUITE_AES_192_CBC 2
 #define CIPHER_SUITE_AES_256_CBC 3
+/* End of definitions for CIpher Suite TLV*/
 
 #define BUFFER_TYPE_INCREASE 3
 #define BUFFER_LENGTH_INCREASE 3
 
-#define KEY_ID 0x88
-
-
 /* Payload chunk size in LW (32-bit) and bytes */
 #define CHUNK_LW 8
 #define CHUNK_B (CHUNK_LW*4)
-#define __ctm
-#define __export
-#define __mem
-#define PIF_PLUGIN_RETURN_DROP 1
-#define PIF_PLUGIN_RETURN_FORWARD 0
 
 
-/****************************** MACROS ******************************/
+/****************************** SHA256 MACROS ******************************/
 #define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
 #define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
 
@@ -57,12 +67,12 @@
 #define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
 #define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
 
-
-
-/****************************** MACROS ******************************/
+/****************************** END SHA256 MACROS ******************************/
 
 #define SHA256_BLOCK_SIZE 32            // SHA256 outputs a 32 byte digest
 
+
+/**************************** Definitions for Signature Info and Signature Value TLVs ****************************/
 #define SIG_VALUE_T_SIZE 1
 #define SIG_VALUE_L_SIZE 1
 #define SIG_VALUE_V_SIZE SHA256_BLOCK_SIZE
@@ -72,40 +82,56 @@
 #define SIG_INFO_SIZE (SIG_INFO_T_SIZE + SIG_INFO_L_SIZE + SIG_INFO_V_SIZE)
 #define SIG_VALUE_SIZE (SIG_VALUE_T_SIZE + SIG_VALUE_L_SIZE + SIG_VALUE_V_SIZE)
 #define NEW_SIGNATURE_SIZE (SIG_INFO_SIZE + SIG_VALUE_SIZE)
+/**************************** End of definitions for Signature Info and Signature Value TLVs ****************************/
+
 
 /**************************** DATA TYPES ****************************/
 
-typedef unsigned char BYTE;             // 8-bit byte
 
+typedef unsigned char BYTE;             // 8-bit byte
 typedef unsigned int  WORD;             // 32-bit word, change to "long" for 16-bit machines
 
 
-
 typedef struct {
-
 	BYTE data[64];
-
 	WORD datalen;
-
 	unsigned long long bitlen;
-
 	WORD state[8];
-
 } SHA256_CTX;
 
-/* */
-volatile __export __mem uint32_t pif_mu_len = 0;
 
+typedef struct {
+	 uint8_t* contentTLVStartPosition;
+	 uint32_t signatureStartOffset;
+	 uint32_t signatureInfoAndValueTLVSize;
+	 uint8_t* encryptMeHeaderStartPosition;
+	 uint32_t contentTLVOffset;
+	 uint32_t cipherSuite;
+	 uint32_t keyId;
+	 uint32_t contentTLVSize;
+	 uint32_t encryptMeHeaderTLVSize;
+	 uint32_t dataSize;
+	 uint32_t dataTLVSize;
+
+} encrypt_me_result;
+
+
+/****************************  ****************************/
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
 static __export __ctm uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
-static __export __ctm uint8_t encrypt_input_buffer[PAYLOAD_BUFFER_SIZE];
-
-static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE+BLOCKLEN+BLOCKLEN+BUFFER_LENGTH_INCREASE+BUFFER_TYPE_INCREASE];
-
+static __export __ctm uint8_t encrypt_input_buffer[300];
+static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE + BLOCKLEN + BLOCKLEN + BUFFER_LENGTH_INCREASE + BUFFER_TYPE_INCREASE];
 static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+static __export __mem SHA256_CTX sha_context;
+
+#ifdef ECLIPSE
+static uint8_t payload[] = {0x06, 0xfd, 0x01, 0x9f, 0x07, 0x21, 0x08, 0x03, 0x6e, 0x64, 0x6e, 0x08, 0x03, 0x65, 0x64, 0x75, 0x08, 0x03, 0x75, 0x63, 0x69, 0x08, 0x04, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x0a, 0x31, 0x30, 0x36, 0x36, 0x32, 0x32, 0x37, 0x35, 0x30, 0x35, 0x14, 0x04, 0x19, 0x02, 0x03, 0xe8, 0xfd, 0x80, 0xe8, 0x0a, 0xfd, 0x80, 0xe9, 0x01, 0x77, 0xfd, 0x80, 0xea, 0x01, 0x88, 0x15, 0x16, 0x4e, 0x44, 0x4e, 0x20, 0x54, 0x4c, 0x56, 0x20, 0x50, 0x69, 0x6e, 0x67, 0x20, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x00, 0x16, 0x4a, 0x1b, 0x01, 0x01, 0x1c, 0x45, 0x07, 0x43, 0x08, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x08, 0x07, 0x64, 0x61, 0x65, 0x6d, 0x6f, 0x6e, 0x73, 0x08, 0x0c, 0x6e, 0x64, 0x6e, 0x2d, 0x74, 0x6c, 0x76, 0x2d, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x03, 0x4b, 0x45, 0x59, 0x08, 0x11, 0x6b, 0x73, 0x6b, 0x2d, 0x31, 0x34, 0x30, 0x36, 0x34, 0x32, 0x31, 0x33, 0x38, 0x33, 0x36, 0x35, 0x33, 0x08, 0x07, 0x49, 0x44, 0x2d, 0x43, 0x45, 0x52, 0x54, 0x17, 0xfd, 0x01, 0x00, 0x31, 0x8b, 0x4b, 0x84, 0x50, 0xc0, 0xfa, 0x62, 0x95, 0xbb, 0x53, 0x50, 0xf7, 0xbf, 0x3d, 0xc0, 0xe5, 0xe6, 0x3d, 0x43, 0x48, 0x07, 0x30, 0x59, 0xfa, 0xd3, 0xbd, 0xad, 0x5f, 0x13, 0xc0, 0x9b, 0xb4, 0x69, 0xb0, 0x3b, 0x7c, 0xe7, 0xb2, 0xaf, 0xde, 0x3d, 0x05, 0x1f, 0xe3, 0xb9, 0xb7, 0x10, 0x92, 0x34, 0xe3, 0x82, 0x5b, 0x5f, 0x13, 0xd4, 0x18, 0xb1, 0xe6, 0xe0, 0xbf, 0x07, 0x17, 0xb0, 0x49, 0x32, 0x49, 0xaa, 0xa2, 0x3e, 0x2f, 0xde, 0x47, 0x6a, 0x3c, 0x5a, 0x7a, 0xae, 0x85, 0xa9, 0xb3, 0xd4, 0x84, 0x15, 0x78, 0x78, 0xc3, 0x9a, 0x0e, 0x80, 0xb3, 0x89, 0x85, 0x6a, 0xd9, 0x45, 0xfc, 0xf1, 0x68, 0x88, 0xdc, 0x82, 0xea, 0xe3, 0x40, 0x49, 0x8e, 0xbe, 0xb1, 0x2c, 0x31, 0xb9, 0x25, 0x0e, 0x35, 0xb5, 0x35, 0xda, 0x33, 0xd5, 0x66, 0xdd, 0x07, 0xda, 0xd5, 0x41, 0xfd, 0xf0, 0xb4, 0x07, 0x8b, 0x53, 0x77, 0x50, 0x8c, 0xfe, 0xbf, 0x22, 0xfd, 0xfd, 0xff, 0xc6, 0x50, 0xc4, 0x9a, 0xc5, 0x2b, 0x36, 0xa3, 0x5f, 0x89, 0xa8, 0xcc, 0xbd, 0x1c, 0xd7, 0x25, 0x3a, 0x6e, 0x39, 0x89, 0xf3, 0xbe, 0x73, 0xcf, 0x00, 0xb8, 0x57, 0x34, 0xe9, 0x08, 0x0d, 0x70, 0xc8
+, 0x60, 0x7d, 0x8c, 0x82, 0x1b, 0x35, 0x1c, 0xf4, 0xe3, 0x65, 0xad, 0x2a, 0x51, 0x47, 0x60, 0x72, 0x8c, 0xe6, 0x28, 0xe7, 0x9c, 0x7f, 0xdd, 0x3e, 0x44, 0xd7, 0x8b, 0x3a, 0x44, 0xa1, 0x49, 0x24, 0xf1, 0x45, 0x36, 0x5e, 0x1d, 0x1c, 0x7e, 0x35, 0x12, 0x71, 0x61, 0x30, 0xf3, 0xe6, 0xb0, 0xf4, 0xd2, 0xff, 0xf3, 0x54, 0x04, 0xb6, 0xfa, 0x34, 0x17, 0x6f, 0x8b, 0xac, 0x55, 0xf5, 0xae, 0xbb, 0x11, 0xdd, 0x90, 0x05, 0xb8, 0x27, 0xe0, 0x29, 0x8e, 0x2b, 0x5e, 0x02, 0x47, 0x41, 0x70, 0xed, 0x1b, 0x62};
+#endif
+
+/* ***************************  *************************** */
 
 /*
-
 This is an implementation of the AES algorithm, specifically ECB and CBC mode.
 Block size can be chosen in aes.h - available choices are AES128, AES192, AES256.
 
@@ -136,8 +162,6 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
         For AES192/256 the block size is proportionally larger.
 
 */
-
-
 
 #define Nb 4
 
@@ -174,20 +198,18 @@ typedef uint8_t state_t[4][4];
 static state_t* state;
 
 // The array that stores the round keys.
-static uint8_t RoundKey[keyExpSize];
+static __export __ctm uint8_t RoundKey[keyExpSize];
 
 // The Key input to the AES Program
 static const uint8_t* Key;
 
-#if defined(CBC) && CBC
-  // Initial Vector used only for CBC mode
-  static uint8_t* Iv;
-#endif
+// Initial Vector used only for CBC mode
+static __mem uint8_t* Iv;
 
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
 // The numbers below can be computed dynamically trading ROM for RAM -
 // This can be useful in (embedded) bootloader applications, where ROM is often limited.
-static const uint8_t sbox[256] = {
+static __export __ctm const uint8_t sbox[256] = {
   //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
   0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
   0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -206,7 +228,7 @@ static const uint8_t sbox[256] = {
   0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
   0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
 
-static const uint8_t rsbox[256] = {
+static __export __ctm const uint8_t rsbox[256] = {
   0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
   0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
   0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
@@ -226,43 +248,11 @@ static const uint8_t rsbox[256] = {
 
 // The round constant word array, Rcon[i], contains the values given by
 // x to th e power (i-1) being powers of x (x is denoted as {02}) in the field GF(2^8)
-static const uint8_t Rcon[11] = {
+static __export __ctm const uint8_t Rcon[11] = {
   0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
 
-/*
- * Jordan Goulder points out in PR #12 (https://github.com/kokke/tiny-AES128-C/pull/12),
- * that you can remove most of the elements in the Rcon array, because they are unused.
- *
- * From Wikipedia's article on the Rijndael key schedule @ https://en.wikipedia.org/wiki/Rijndael_key_schedule#Rcon
- *
- * "Only the first some of these constants are actually used â€“ up to rcon[10] for AES-128 (as 11 round keys are needed),
- *  up to rcon[8] for AES-192, up to rcon[7] for AES-256. rcon[0] is not used in AES algorithm."
- *
- * ... which is why the full array below has been 'disabled' below.
- */
-#if 0
-static const uint8_t Rcon[256] = {
-  0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a,
-  0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39,
-  0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a,
-  0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8,
-  0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef,
-  0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc,
-  0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b,
-  0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3,
-  0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94,
-  0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20,
-  0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35,
-  0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd, 0x61, 0xc2, 0x9f,
-  0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d, 0x01, 0x02, 0x04,
-  0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a, 0x2f, 0x5e, 0xbc, 0x63,
-  0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39, 0x72, 0xe4, 0xd3, 0xbd,
-  0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb, 0x8d };
-#endif
-
-
 /**************************** VARIABLES *****************************/
-static const WORD k[64] = {
+static __export __ctm const WORD k[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
 	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
 	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -275,6 +265,23 @@ static const WORD k[64] = {
 
 
 /*****************************************************************************/
+/* TNO functions:                                                        */
+/*****************************************************************************/
+#ifdef ECLIPSE
+void print_buf(uint8_t* buf, size_t size){
+	int i =0;
+	for (i = 0; i < size ; i++) {
+		if ( i % 16 == 0 ){
+			printf("\n");
+		}
+		printf("%02x ", buf[i]);
+	}
+	printf("\n\n");
+}
+
+#endif
+
+/*****************************************************************************/
 /* Private functions:                                                        */
 /*****************************************************************************/
 static uint8_t getSBoxValue(uint8_t num)
@@ -282,10 +289,10 @@ static uint8_t getSBoxValue(uint8_t num)
   return sbox[num];
 }
 
-static uint8_t getSBoxInvert(uint8_t num)
-{
-  return rsbox[num];
-}
+//static uint8_t getSBoxInvert(uint8_t num)
+//{
+//  return rsbox[num];
+//}
 
 // This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states.
 static void KeyExpansion(void)
@@ -459,69 +466,6 @@ static uint8_t Multiply(uint8_t x, uint8_t y)
 
 #endif
 
-// MixColumns function mixes the columns of the state matrix.
-// The method used to multiply may be difficult to understand for the inexperienced.
-// Please use the references to gain more information.
-static void InvMixColumns(void)
-{
-  int i;
-  uint8_t a, b, c, d;
-  for (i = 0; i < 4; ++i)
-  {
-    a = (*state)[i][0];
-    b = (*state)[i][1];
-    c = (*state)[i][2];
-    d = (*state)[i][3];
-
-    (*state)[i][0] = Multiply(a, 0x0e) ^ Multiply(b, 0x0b) ^ Multiply(c, 0x0d) ^ Multiply(d, 0x09);
-    (*state)[i][1] = Multiply(a, 0x09) ^ Multiply(b, 0x0e) ^ Multiply(c, 0x0b) ^ Multiply(d, 0x0d);
-    (*state)[i][2] = Multiply(a, 0x0d) ^ Multiply(b, 0x09) ^ Multiply(c, 0x0e) ^ Multiply(d, 0x0b);
-    (*state)[i][3] = Multiply(a, 0x0b) ^ Multiply(b, 0x0d) ^ Multiply(c, 0x09) ^ Multiply(d, 0x0e);
-  }
-}
-
-// The SubBytes Function Substitutes the values in the
-// state matrix with values in an S-box.
-static void InvSubBytes(void)
-{
-  uint8_t i,j;
-  for (i = 0; i < 4; ++i)
-  {
-    for (j = 0; j < 4; ++j)
-    {
-      (*state)[j][i] = getSBoxInvert((*state)[j][i]);
-    }
-  }
-}
-
-static void InvShiftRows(void)
-{
-  uint8_t temp;
-
-  // Rotate first row 1 columns to right
-  temp = (*state)[3][1];
-  (*state)[3][1] = (*state)[2][1];
-  (*state)[2][1] = (*state)[1][1];
-  (*state)[1][1] = (*state)[0][1];
-  (*state)[0][1] = temp;
-
-  // Rotate second row 2 columns to right
-  temp = (*state)[0][2];
-  (*state)[0][2] = (*state)[2][2];
-  (*state)[2][2] = temp;
-
-  temp = (*state)[1][2];
-  (*state)[1][2] = (*state)[3][2];
-  (*state)[3][2] = temp;
-
-  // Rotate third row 3 columns to right
-  temp = (*state)[0][3];
-  (*state)[0][3] = (*state)[1][3];
-  (*state)[1][3] = (*state)[2][3];
-  (*state)[2][3] = (*state)[3][3];
-  (*state)[3][3] = temp;
-}
-
 // Cipher is the main function that encrypts the PlainText.
 static void Cipher(void)
 {
@@ -548,38 +492,12 @@ static void Cipher(void)
   AddRoundKey(Nr);
 }
 
-static void InvCipher(void)
-{
-  uint8_t round=0;
 
-  // Add the First round key to the state before starting the rounds.
-  AddRoundKey(Nr);
-
-  // There will be Nr rounds.
-  // The first Nr-1 rounds are identical.
-  // These Nr-1 rounds are executed in the loop below.
-  for (round = (Nr - 1); round > 0; --round)
-  {
-    InvShiftRows();
-    InvSubBytes();
-    AddRoundKey(round);
-    InvMixColumns();
-  }
-
-  // The last round is given below.
-  // The MixColumns function is not here in the last round.
-  InvShiftRows();
-  InvSubBytes();
-  AddRoundKey(0);
-}
 
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
-#if defined(CBC) && (CBC == 1)
-
-
-static void XorWithIv(uint8_t* buf)
+static void XorWithIv(__mem uint8_t* buf)
 {
   uint8_t i;
   for (i = 0; i < BLOCKLEN; ++i) //WAS for(i = 0; i < KEYLEN; ++i) but the block in AES is always 128bit so 16 bytes!
@@ -588,11 +506,9 @@ static void XorWithIv(uint8_t* buf)
   }
 }
 
-void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
+void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_t length, const uint8_t* key, __mem const uint8_t* iv)
 {
-  //uintptr_t i; // This type is not usable in Programmer Studio Environment, use standard uint32_t instead
   uint32_t i;
-  //uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
 
   // Skip the key expansion if key is passed as 0
   if (0 != key)
@@ -609,135 +525,21 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
   for (i = 0; i < length; i += BLOCKLEN)
   {
     XorWithIv(input);
-    memcpy(output, input, BLOCKLEN);
+    memmove_mem_mem(output, input, BLOCKLEN);
     state = (state_t*)output;
     Cipher();
     Iv = output;
     input += BLOCKLEN;
     output += BLOCKLEN;
-    //printf("Step %d - %d", i/16, i);
   }
 
-//  if (extra)
-//  {
-//    memcpy(output, input, extra);
-//    state = (state_t*)output;
-//    Cipher();
-//  }
 }
 
-void AES_CBC_decrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
+
+/* SHA Functions*/
+void sha256_transform(__mem SHA256_CTX *ctx, __mem const BYTE data[])
 {
-  //uintptr_t i;
-  uint32_t i;
-  uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
-
-  // Skip the key expansion if key is passed as 0
-  if (0 != key)
-  {
-    Key = key;
-    KeyExpansion();
-  }
-
-  // If iv is passed as 0, we continue to encrypt without re-setting the Iv
-  if (iv != 0)
-  {
-    Iv = (uint8_t*)iv;
-  }
-
-  for (i = 0; i < length; i += BLOCKLEN)
-  {
-    memcpy(output, input, BLOCKLEN);
-    state = (state_t*)output;
-    InvCipher();
-    XorWithIv(output);
-    Iv = input;
-    input += BLOCKLEN;
-    output += BLOCKLEN;
-  }
-
-  if (extra)
-  {
-    memcpy(output, input, extra);
-    state = (state_t*)output;
-    InvCipher();
-  }
-}
-
-#endif // #if defined(CBC) && (CBC == 1)
-
-static int tlv_len_offset(uint8_t *buff, int currpos, uint32_t *TLVlen, uint32_t *TLVlenK){
-	uint8_t len0 = buff[currpos++]; //get length and advance
-	uint32_t len = 0;
-	uint8_t lenK = 1;
-    uint8_t i = 0;
-
-	if (len0 < 253){
-		len = len0;
-	}
-	else {
-		//length encoded in following 2,4,or 8 octets
-		switch (len0){
-    		case 253 :
-    			lenK = 2;
-    			break;
-    		case 254 :
-    			lenK = 4;
-    			break;
-    		case 255 :
-    			lenK = 8;
-    			break;
-    		default :
-    			return -1;
-
-		}
-		for(i=0; i < lenK; i++){
-			len = len * 256 + buff[currpos++];
-		}
-		lenK++; //account for the fact that first octet plays now indication role
-	}
-	*TLVlen = len;
-	*TLVlenK = lenK;
-	return 0;
-}
-
-// NDN packet with testvector embedded inside the content TLV
-uint8_t empayload[] = {
-	0x06, 0xfd, 0x01, 0xc9, 0x07, 0x21, 0x08, 0x03, 0x6e, 0x64, 0x6e, 0x08, 0x03, 0x65, 0x64, 0x75, 0x08, 0x03,
-	0x75, 0x63, 0x69, 0x08, 0x04, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x0a, 0x31, 0x30, 0x36, 0x36, 0x32, 0x32, 0x37,
-	0x35, 0x30, 0x35, 0x14, 0x04, 0x19, 0x02, 0x03, 0xe8, 0xfd, 0x80, 0xe8, 0x0a, 0xfd, 0x80, 0xe9, 0x01, 0x77,
-	0xfd, 0x80, 0xea, 0x01, 0x88, 0x15, 0x40, 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
-	0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45,
-	0xaf, 0x8e, 0x51, 0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52,
-	0xef, 0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10,
-
-	0x16,
-	0x4a, 0x1b, 0x01, 0x01, 0x1c, 0x45, 0x07, 0x43, 0x08, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73,
-	0x74, 0x08, 0x07, 0x64, 0x61, 0x65, 0x6d, 0x6f, 0x6e, 0x73, 0x08, 0x0c, 0x6e, 0x64, 0x6e, 0x2d, 0x74, 0x6c,
-	0x76, 0x2d, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x03, 0x4b, 0x45, 0x59, 0x08, 0x11, 0x6b, 0x73, 0x6b, 0x2d, 0x31,
-	0x34, 0x30, 0x36, 0x34, 0x32, 0x31, 0x33, 0x38, 0x33, 0x36, 0x35, 0x33, 0x08, 0x07, 0x49, 0x44, 0x2d, 0x43,
-	0x45, 0x52, 0x54,
-
-	0x17, 0xfd, 0x01, 0x00, 0x31, 0x8b, 0x4b, 0x84, 0x50, 0xc0, 0xfa, 0x62, 0x95, 0xbb, 0x53,
-	0x50, 0xf7, 0xbf, 0x3d, 0xc0, 0xe5, 0xe6, 0x3d, 0x43, 0x48, 0x07, 0x30, 0x59, 0xfa, 0xd3, 0xbd, 0xad, 0x5f,
-	0x13, 0xc0, 0x9b, 0xb4, 0x69, 0xb0, 0x3b, 0x7c, 0xe7, 0xb2, 0xaf, 0xde, 0x3d, 0x05, 0x1f, 0xe3, 0xb9, 0xb7,
-	0x10, 0x92, 0x34, 0xe3, 0x82, 0x5b, 0x5f, 0x13, 0xd4, 0x18, 0xb1, 0xe6, 0xe0, 0xbf, 0x07, 0x17, 0xb0, 0x49,
-	0x32, 0x49, 0xaa, 0xa2, 0x3e, 0x2f, 0xde, 0x47, 0x6a, 0x3c, 0x5a, 0x7a, 0xae, 0x85, 0xa9, 0xb3, 0xd4, 0x84,
-	0x15, 0x78, 0x78, 0xc3, 0x9a, 0x0e, 0x80, 0xb3, 0x89, 0x85, 0x6a, 0xd9, 0x45, 0xfc, 0xf1, 0x68, 0x88, 0xdc,
-	0x82, 0xea, 0xe3, 0x40, 0x49, 0x8e, 0xbe, 0xb1, 0x2c, 0x31, 0xb9, 0x25, 0x0e, 0x35, 0xb5, 0x35, 0xda, 0x33,
-	0xd5, 0x66, 0xdd, 0x07, 0xda, 0xd5, 0x41, 0xfd, 0xf0, 0xb4, 0x07, 0x8b, 0x53, 0x77, 0x50, 0x8c, 0xfe, 0xbf,
-	0x22, 0xfd, 0xfd, 0xff, 0xc6, 0x50, 0xc4, 0x9a, 0xc5, 0x2b, 0x36, 0xa3, 0x5f, 0x89, 0xa8, 0xcc, 0xbd, 0x1c,
-	0xd7, 0x25, 0x3a, 0x6e, 0x39, 0x89, 0xf3, 0xbe, 0x73, 0xcf, 0x00, 0xb8, 0x57, 0x34, 0xe9, 0x08, 0x0d, 0x70,
-	0xc8, 0x60, 0x7d, 0x8c, 0x82, 0x1b, 0x35, 0x1c, 0xf4, 0xe3, 0x65, 0xad, 0x2a, 0x51, 0x47, 0x60, 0x72, 0x8c,
-	0xe6, 0x28, 0xe7, 0x9c, 0x7f, 0xdd, 0x3e, 0x44, 0xd7, 0x8b, 0x3a, 0x44, 0xa1, 0x49, 0x24, 0xf1, 0x45, 0x36,
-	0x5e, 0x1d, 0x1c, 0x7e, 0x35, 0x12, 0x71, 0x61, 0x30, 0xf3, 0xe6, 0xb0, 0xf4, 0xd2, 0xff, 0xf3, 0x54, 0x04,
-	0xb6, 0xfa, 0x34, 0x17, 0x6f, 0x8b, 0xac, 0x55, 0xf5, 0xae, 0xbb, 0x11, 0xdd, 0x90, 0x05, 0xb8, 0x27, 0xe0,
-	0x29, 0x8e, 0x2b, 0x5e, 0x02, 0x47, 0x41, 0x70, 0xed, 0x1b, 0x62
-};
-
-void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
-{
-	WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+	__mem WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
 
 	for (i = 0, j = 0; i < 16; ++i, j += 4)
 		m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
@@ -776,7 +578,7 @@ void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
 	ctx->state[7] += h;
 }
 
-void sha256_init(SHA256_CTX *ctx)
+void sha256_init(__mem SHA256_CTX *ctx)
 {
 	ctx->datalen = 0;
 	ctx->bitlen = 0;
@@ -790,7 +592,7 @@ void sha256_init(SHA256_CTX *ctx)
 	ctx->state[7] = 0x5be0cd19;
 }
 
-void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
+void sha256_update(__mem SHA256_CTX *ctx, __mem const BYTE data[], size_t len)
 {
 	WORD i;
 
@@ -805,9 +607,9 @@ void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
 	}
 }
 
-void sha256_final(SHA256_CTX *ctx, BYTE hash[])
+void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 {
-	WORD i;
+	__mem WORD i;
 
 	i = ctx->datalen;
 
@@ -822,7 +624,7 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 		while (i < 64)
 			ctx->data[i++] = 0x00;
 		sha256_transform(ctx, ctx->data);
-		memset(ctx->data, 0, 56);
+		memset_mem(ctx->data, 0, 56);
 	}
 
 	// Append to the padding the total message's length in bits and transform.
@@ -851,25 +653,41 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 	}
 }
 
+/* End of SHA functions */
 
-void mymemmove(uint8_t *to, uint8_t *from, size_t size) {
-	int i;
+static int tlv_len_offset(uint8_t *buff, int currpos, __mem uint32_t *TLVlen, __mem uint32_t *TLVlenK){
+	uint8_t len0 = buff[currpos++]; //get length and advance
+	uint32_t len = 0;
+	uint8_t lenK = 1;
+    uint8_t i = 0;
 
-	if(from == to){// Nothing to copy!
-		return;
+	if (len0 < 253){
+		len = len0;
 	}
-	else if(from > to)
-	{
-		for(i = 0; i < size; i++) {
-			to[i] = from[i];
+	else {
+		//length encoded in following 2,4,or 8 octets
+		switch (len0){
+    		case 253 :
+    			lenK = 2;
+    			break;
+    		case 254 :
+    			lenK = 4;
+    			break;
+    		case 255 :
+    			lenK = 8;
+    			break;
+    		default :
+    			return -1;
+
 		}
-	}
-	else
-	{
-		for(i = size-1; i >= 0; i--) {
-			to[i] = from[i];
+		for(i=0; i < lenK; i++){
+			len = len * 256 + buff[currpos++];
 		}
+		lenK++; //account for the fact that first octet plays now indication role
 	}
+	*TLVlen = len;
+	*TLVlenK = lenK;
+	return 0;
 }
 
 uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
@@ -881,42 +699,18 @@ uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
 	return value;
 }
 
-int get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
+int get_type(uint8_t* buf, __mem uint32_t *type, __mem uint32_t *type_size){
 	return(tlv_len_offset(buf, 0, type, type_size));
 }
 
-int get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length_size){
+int get_length(uint8_t* buf, uint32_t offset, __mem uint32_t *length, __mem uint32_t *length_size){
 	return(tlv_len_offset(buf, offset, length, length_size));
 }
 
-typedef struct {
-
-	 uint8_t* contentTLVStartPosition;
-	 uint32_t signatureStartOffset;
-	 uint32_t signatureInfoAndValueTLVSize;
-	 uint8_t* encryptMeHeaderStartPosition;
-	 uint32_t contentTLVOffset;
-	 uint32_t cipherSuite;
-	 uint32_t keyId;
-	 uint32_t contentTLVSize;
-	 uint32_t encryptMeHeaderTLVSize;
-	 uint32_t dataSize;
-	 uint32_t dataTLVSize;
-
-} encrypt_me_result;
-
-/*
- * Find encrypt me header - get pointer to start
- * Find start of signature header - get pointer to start
- * Extract cipher suite and key from encrypt me header
- * Find end of encrypt me header - get pointer, this should be start of content
- * Determine the range of content ( end pointer of encrypt me + 1 -- start of signature pointer)
- * It saves these values into the encrypt_me_result struct that is passed to the method
- * */
-int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_header){
+int get_encrypt_me_header_content(uint8_t* buf, __mem encrypt_me_result *encrypt_me_header){
     uint32_t currentPosition = 0;
     uint32_t start_unencrypted_position = 0;
-    uint32_t type =0 , type_size =0 , length =0 , length_size = 0;
+    __mem uint32_t type =0 , type_size =0  , length_size = 0, length =0;
 
 	get_type(buf+currentPosition, &type, &type_size);
 
@@ -924,7 +718,7 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 		return PIF_PLUGIN_RETURN_DROP;
 	}
 
-	get_length(buf+currentPosition, type_size, &(encrypt_me_header->dataSize), &length_size);
+	get_length(buf + currentPosition, type_size, &(encrypt_me_header->dataSize), &length_size);
 	encrypt_me_header->dataTLVSize = type_size + length_size + encrypt_me_header->dataSize;
 
 	currentPosition += type_size + length_size;
@@ -982,9 +776,7 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 			encrypt_me_header->contentTLVStartPosition = buf + encryptMeHeaderPosition;
 			start_unencrypted_position = encryptMeHeaderPosition;
 			encrypt_me_header->contentTLVOffset = start_unencrypted_position;
-
 			break; //exit for loop
-
 		}
 
 		currentPosition += type_size + length_size + length;
@@ -1007,7 +799,6 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 
 		currentPosition += type_size + length_size + length;
 
-
 		if(currentPosition == encrypt_me_header->dataTLVSize)
 			break;
 		if(currentPosition > encrypt_me_header->dataTLVSize){
@@ -1017,53 +808,104 @@ int get_encrypt_me_header_content(uint8_t* buf, encrypt_me_result *encrypt_me_he
 	return 0;
 }
 
-void print_buf(uint8_t* buf, size_t size){
-	int i =0;
-	for (i = 0; i < size ; i++) {
-		if ( i % 16 == 0 ){
-			printf("\n");
-		}
-		printf("%02x ", buf[i]);
-	}
-	printf("\n\n");
-}
 
-int main(){
-	encrypt_me_result result;
-	SHA256_CTX sha_context;
+#ifndef ECLIPSE
+int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
+                            MATCH_DATA_T *match_data)
+#else
+	int main()
+#endif
 
-	int i;
-	int encryptMeOffset = 0;
-	int originalDataSize = 0;
-	int originalContentTLVOffset = 0;
-	int amountOfPaddingBytesForEncryptedContent = 0;
-	int sizeOfEncryptMeHeaderTL = 0;
-	int contentIncreaseDueToEncryption = 0;
-	int correctedOriginalDataSize = 0;
-	uint32_t sizeOfContentTLVAfterEncryption = 0;
-	int signatureTLVSize = 0;
-	int signatureTLVSizeDifference = 0;
-	int dataTLVValueStartOffset = 0;
+{
+	#ifndef ECLIPSE
+	uint32_t mu_len, ctm_len;
+    __mem uint8_t *payload;
+    PIF_PLUGIN_udp_T *udp;
+    PIF_PLUGIN_ipv4_T *ipv4;
+    short length_inc;
+	#endif
 
-	// Initialize the values inside the struct to 0
-	memset((uint8_t*) &result, 0, sizeof(result));
 
-	// Initialize all values in the buffer to 0
-    for (i = 0; i < sizeof(packet_buffer); i++) {
-    	packet_buffer[i] = 0;
+    uint16_t length;
+    __lmem uint32_t count;
+	__mem encrypt_me_result result = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	__lmem uint16_t encryptMeOffset = 0;
+    int i;
+    uint16_t originalDataSize = 0;
+    uint16_t originalContentTLVOffset = 0;
+    uint16_t amountOfPaddingBytesForEncryptedContent = 0;
+    uint16_t sizeOfEncryptMeHeaderTL = 0;
+    uint16_t contentIncreaseDueToEncryption = 0;
+    uint16_t correctedOriginalDataSize = 0;
+	uint16_t sizeOfContentTLVAfterEncryption = 0;
+	uint16_t signatureTLVSize = 0;
+	short signatureTLVSizeDifference = 0;
+	uint16_t dataTLVValueStartOffset = 0;
+
+#ifndef ECLIPSE
+    ipv4 = pif_plugin_hdr_get_ipv4(headers);
+
+    if(ipv4->mf_flag == 1){
+        return PIF_PLUGIN_RETURN_DROP;
+    }
+    if(ipv4->fragOffset > 0 ){
+        return PIF_PLUGIN_RETURN_DROP;
     }
 
-    for (i = 0; i < sizeof(encrypt_me_tlv_buffer); i++) {
-    	encrypt_me_tlv_buffer[i] = 0;
+    if(pif_pkt_info_global.pkt_len > (1500 - BLOCKLEN)){
+         return PIF_PLUGIN_RETURN_DROP;
     }
 
-    // Move the payload to the buffer
-    mymemmove(packet_buffer, empayload, sizeof(empayload));
+    if (pif_pkt_info_global.split) { /* payload split to MU */
+        uint32_t sop; /* start of packet offset */
+        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+    } else /* no data in MU */
+        mu_len = 0;
 
-    // Obtain the encrypt_me_result struct
-	if(get_encrypt_me_header_content(packet_buffer, &result) != 0){
-		return PIF_PLUGIN_RETURN_DROP;
-	}
+    /* get the ctm byte count:
+     * packet length - offset to parsed headers - byte_count_in_mu
+     * Note: the parsed headers are always in ctm
+     */
+    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
+    /* Get a pointer to the ctm portion */
+    payload = pif_pkt_info_global.pkt_buf;
+    /* point to just beyond the parsed headers */
+    payload += pif_pkt_info_global.pkt_pl_off;
+
+    memmove_mem_mem(packet_buffer, payload, count);
+
+    //for (i = 0; i < count; i++) {
+    //       packet_buffer[i]=payload[i];
+    //}
+
+    length = count; //prevent overwrite of beginning of buf
+
+    /* same as above, but for mu. Code duplicated as a manual unroll */
+    if (mu_len) {
+        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+        /* Adjust payload size depending on the ctm size for the packet */
+        payload += 256 << pif_pkt_info_global.ctm_size;
+        count = mu_len;
+        memmove_mem_mem(packet_buffer + length, payload, count);
+
+
+        //for (i = 0; i < count; i++) {
+        //   packet_buffer[length+i]=payload[i];
+        //}
+        length += count;
+    }
+#else
+    for (i = 0; i < sizeof(payload); i++) {
+             packet_buffer[i]=payload[i];
+      }
+    length=sizeof(payload);
+#endif
+
+
+    if(get_encrypt_me_header_content((uint8_t *)packet_buffer, &result) != 0){
+    		return PIF_PLUGIN_RETURN_DROP;
+   	}
 
 	// Calculate the new lengths of the SignatureInfo and SignatureValue TLVs
 	signatureTLVSize = NEW_SIGNATURE_SIZE;
@@ -1104,11 +946,14 @@ int main(){
 
 	sizeOfEncryptMeHeaderTL += encryptMeOffset;
 
-	// Copy iv to the start of the output buffer
-    for (i = 0; i < BLOCKLEN; i++) {
-	   encrypt_me_tlv_buffer[i + encryptMeOffset] = iv[i];
-    }
 
+	// Copy iv to the start of the output buffer
+
+    //for (i = 0; i < BLOCKLEN; i++) {
+	//   encrypt_me_tlv_buffer[i + encryptMeOffset] = iv[i];
+    //}
+
+    memmove_mem_mem(encrypt_me_tlv_buffer + encryptMeOffset, iv, BLOCKLEN);
     // Compensate the offset for iv by adding BLOCKLEN
     encryptMeOffset += BLOCKLEN;
 
@@ -1119,16 +964,16 @@ int main(){
 	result.dataSize += contentIncreaseDueToEncryption;
 	result.dataTLVSize += contentIncreaseDueToEncryption;
 
-	mymemmove(encrypt_input_buffer, (uint8_t*)(result.contentTLVStartPosition), result.contentTLVSize);
+	memmove_mem_mem(encrypt_input_buffer, result.contentTLVStartPosition, result.contentTLVSize);
+
+    // Copy this state of the variable for moving over everything after the content
+     correctedOriginalDataSize = originalDataSize;
 
     AES_CBC_encrypt_buffer((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
-    		encrypt_input_buffer,
+    		(uint8_t *) encrypt_input_buffer,
     		result.contentTLVSize,
     		(uint8_t*) key,
     		(uint8_t*) iv);
-
-    // Copy this state of the variable for moving over everything after the content
-    correctedOriginalDataSize = originalDataSize;
 
     // Check value for L field of the Data TLV, if encoding is increased, do make_space
 	if(result.dataSize < 253 && originalDataSize < 253){ // Size did not change after encryption
@@ -1148,7 +993,7 @@ int main(){
 		result.contentTLVOffset += 2;
 		dataTLVValueStartOffset = 4;
 		// call make space function with 2 bytes
-		mymemmove(packet_buffer + 3, packet_buffer + 1, originalDataSize - 1);
+		memmove_mem_mem(packet_buffer + 3, packet_buffer + 1, originalDataSize - 1);
 	} else if (result.dataSize >= 253 && originalDataSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
 		packet_buffer[1] = 0xfd;
 		packet_buffer[2] = (result.dataSize >> 8);
@@ -1163,24 +1008,22 @@ int main(){
 		result.encryptMeHeaderStartPosition -= 2;
 		result.contentTLVOffset -= 2;
 		dataTLVValueStartOffset = 2; // One for Type, One of Length
-		mymemmove(packet_buffer + 2, packet_buffer + 4, originalDataSize - 2); 		// call remove space function with 2 bytes
+		memmove_mem_mem((packet_buffer + 2),(packet_buffer + 4), originalDataSize - 2); // call remove space function with 2 bytes
 	}
 
 	// call make space function with contentIncreaseDueToEncryption as size
-	//	make_space(result.signatureStartOffset , contentIncreaseDueToEncryption);
+	// make_space(result.signatureStartOffset , contentIncreaseDueToEncryption);
 	originalContentTLVOffset = result.contentTLVOffset;
 
 	// Move the signature
-	mymemmove(packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption,
-			packet_buffer + result.signatureStartOffset, correctedOriginalDataSize - result.signatureStartOffset);
-
+	memmove_mem_mem((packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption),
+			(packet_buffer + result.signatureStartOffset), correctedOriginalDataSize - result.signatureStartOffset);
 
 	// The offset of the signature TLV changes due to creating space with contentIncreaseDueToEncryption as amount
 	result.signatureStartOffset += contentIncreaseDueToEncryption;
 
 	// Copy encrypted content into the packet buffer
-	memcpy(packet_buffer + originalContentTLVOffset, encrypt_me_tlv_buffer, sizeOfContentTLVAfterEncryption);
-	print_buf(packet_buffer, result.dataTLVSize);
+	memmove_mem_mem((packet_buffer + originalContentTLVOffset), (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
 
 	// Construct Signature Info TLV (Type=0x16, Length=0x3)
 	packet_buffer[result.signatureStartOffset] = 0x16;
@@ -1193,43 +1036,67 @@ int main(){
 	packet_buffer[result.signatureStartOffset + 5] = 0x17;
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
-	print_buf(packet_buffer + dataTLVValueStartOffset, result.dataSize - signatureTLVSize);
-	print_buf(packet_buffer, result.dataTLVSize);
-
-
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
 	sha256_init(&sha_context);
-	sha256_update(&sha_context, packet_buffer + dataTLVValueStartOffset, result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
+	sha256_update(&sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
 	sha256_final(&sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
 
-	print_buf(packet_buffer, result.dataTLVSize);
-
-	// buf contains the entire payload
-	// outbuf contains the EncryptedContentTLV
-
-    // Pre-prend IV in the output buffer + (generate IV instead of )
-    // Call encrypt function with start pointer of content, length is end encrypt me pointer - start signature pointers
-    // Calculate increase of content size
-
-    // Make space using the increase content size value after the NDN header ( end is best)
-    // Done: Create EncryptedContent TLV - calculate length (original + max 2x padding)
-
-    // Make space for T-L and the extra length of the value
-    // Done: Go to end of encrypt me header pointer
-    // Done: Append the Encrypted Data TLV to the Encrypt Me header from the buffer
-    // Done: Update length of Encrypt me Header
-
-    // Done: Recalculate the L field of the Data TLV
-    // Done: Check value for L field of the Data TLV, if encoding is increased, do make_space
-    // Done: Write new L value for data TLV
 
 
-    // Done: Recalculate Signature
+#ifndef ECLIPSE
+    length_inc = result.dataTLVSize - length;
+    if(length_inc > 0) {
+        pif_pkt_make_space(result.signatureStartOffset, length_inc); // Make space, packet has increased in size
+    } else if (length_inc < 0) {
+        pif_pkt_free_space(result.signatureStartOffset, -length_inc); // Remove space, since packet has decreased in size
+    }
 
-    // Recalculate UDP length
-    // Recalculate IP length
-    // Recalculate UDP checksum
-    // Recalculate IP checksum
+    if (pif_pkt_info_global.split) { /* payload split to MU */
+        uint32_t sop; /* start of packet offset */
+        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+    } else /* no data in MU */
+        mu_len = 0;
 
-	return 0;
+    /* debug info for mu_split */
+    pif_mu_len = mu_len;
+    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
+    /* Get a pointer to the ctm portion */
+    payload = pif_pkt_info_global.pkt_buf;
+    /* point to just beyond the parsed headers */
+    payload += pif_pkt_info_global.pkt_pl_off;
+
+
+    memmove_mem_mem(payload, packet_buffer, count);
+    // for (i = 0; i < count; i++) {
+    //    payload[i]=packet_buffer[i];
+    // }
+
+    length = count; //prevent overwrite of beginning of buf
+
+    /* same as above, but for mu. Code duplicated as a manual unroll */
+    if (mu_len) {
+        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+        /* Adjust payload size depending on the ctm size for the packet */
+        payload += 256 << pif_pkt_info_global.ctm_size;
+        count = mu_len;
+
+        memmove_mem_mem(payload, packet_buffer + length, count);
+
+        // for (i = 0; i < count; i++) {
+        //   payload[i]=packet_buffer[length+i];
+        //}
+    }
+
+    ipv4->totalLen += length_inc;
+
+
+    udp = pif_plugin_hdr_get_udp(headers);
+    udp->len += length_inc;
+#else
+    print_buf(packet_buffer, sizeof(packet_buffer));
+#endif
+    return PIF_PLUGIN_RETURN_FORWARD;
+
+
 }
