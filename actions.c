@@ -287,11 +287,6 @@ static uint8_t getSBoxValue(uint8_t num)
   return sbox[num];
 }
 
-//static uint8_t getSBoxInvert(uint8_t num)
-//{
-//  return rsbox[num];
-//}
-
 // This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states.
 static void KeyExpansion(void)
 {
@@ -423,7 +418,7 @@ static void ShiftRows(void)
   (*state)[1][3] = temp;
 }
 
-static uint8_t xtime(uint8_t x)
+static __forceinline uint8_t xtime(uint8_t x)
 {
   return ((x<<1) ^ (((x>>7) & 1) * 0x1b));
 }
@@ -446,7 +441,7 @@ static void MixColumns(void)
 
 // Multiply is used to multiply numbers in the field GF(2^8)
 #if MULTIPLY_AS_A_FUNCTION
-static uint8_t Multiply(uint8_t x, uint8_t y)
+static __forceinline uint8_t Multiply(uint8_t x, uint8_t y)
 {
   return (((y & 1) * x) ^
        ((y>>1 & 1) * xtime(x)) ^
@@ -495,7 +490,7 @@ static void Cipher(void)
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
-static void XorWithIv(__mem uint8_t* buf)
+static __forceinline void XorWithIv(__mem uint8_t* buf)
 {
   uint8_t i;
   for (i = 0; i < BLOCKLEN; ++i) //WAS for(i = 0; i < KEYLEN; ++i) but the block in AES is always 128bit so 16 bytes!
@@ -508,18 +503,11 @@ void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_
 {
   uint32_t i;
 
-  // Skip the key expansion if key is passed as 0
-  if (0 != key)
-  {
-    Key = key;
-    KeyExpansion();
-  }
+  Key = key;
+  KeyExpansion();
 
-  if (iv != 0)
-  {
-    Iv = (uint8_t*)iv;
-  }
-
+  Iv = (uint8_t*)iv;
+  
   for (i = 0; i < length; i += BLOCKLEN)
   {
     XorWithIv(input);
@@ -610,15 +598,12 @@ void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 	i = ctx->datalen;
 
 	// Pad whatever data is left in the buffer.
+    ctx->data[i++] = 0x80;
 	if (ctx->datalen < 56) {
-		ctx->data[i++] = 0x80;
-		while (i < 56)
-			ctx->data[i++] = 0x00;
+        memset_mem(ctx->data + i, 0x00, 56 -i);
 	}
 	else {
-		ctx->data[i++] = 0x80;
-		while (i < 64)
-			ctx->data[i++] = 0x00;
+        memset_mem(ctx->data + i, 0x00, 64 -i);
 		sha256_transform(ctx, ctx->data);
 		memset_mem(ctx->data, 0, 56);
 	}
@@ -651,11 +636,21 @@ void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 
 /* End of SHA functions */
 
+
+uint32_t extract_value_at_position(uint8_t* buf, uint16_t length){
+	int i;
+	uint32_t value = 0;
+	for( i = 0; i < length; i++){
+		value = value * 256 + *(buf++);
+	}
+	return value;
+}
+
 static int tlv_len_offset(uint8_t*  buff, int currpos, __mem uint32_t *TLVlen, __mem uint32_t *TLVlenK){
 	uint8_t len0 = buff[currpos++]; //get length and advance
 	uint32_t len = 0;
 	uint8_t lenK = 1;
-  uint8_t i;
+    uint8_t i;
 
 	if (len0 < 253){
 		len = len0;
@@ -676,23 +671,12 @@ static int tlv_len_offset(uint8_t*  buff, int currpos, __mem uint32_t *TLVlen, _
     			return -1;
 
 		}
-		for(i=0; i < lenK; i++){
-			len = len * 256 + buff[currpos++];
-		}
+        len = extract_value_at_position(buff + currpos, lenK);
 		lenK++; //account for the fact that first octet plays now indication role
 	}
 	*TLVlen = len;
 	*TLVlenK = lenK;
 	return 0;
-}
-
-uint32_t extract_value_at_position(uint8_t* buf, uint16_t length){
-	int i;
-	uint32_t value = 0;
-	for( i = 0; i < length; i++){
-		value = value * 256 + *(buf++);
-	}
-	return value;
 }
 
 int __forceinline get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
@@ -704,9 +688,9 @@ int __forceinline get_length(uint8_t* buf, uint32_t offset, __mem uint32_t *leng
 }
 
 int get_encrypt_me_header_content(uint8_t* buf, __mem encrypt_me_result *encrypt_me_header){
-  uint32_t currentPosition = 0;
-  uint32_t start_unencrypted_position = 0;
-  uint32_t type =0 , type_size =0  , length_size = 0, length =0;
+    uint32_t currentPosition = 0;
+    uint32_t start_unencrypted_position = 0;
+    uint32_t type =0 , type_size =0  , length_size = 0, length =0;
 
 	get_type(buf+currentPosition, &type, &type_size);
 
@@ -813,8 +797,8 @@ void sha256(__mem const BYTE data[], size_t len, __mem BYTE hash[]){
 }
 
 void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
-	 __mem const uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
-	const uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+	 __mem uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+	 __mem uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
 	 // Copy iv to the start of the output buffer
 	memmove_mem_mem(output, iv, BLOCKLEN);
 	// Compensate the offset for iv by adding BLOCKLEN
@@ -822,7 +806,7 @@ void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
 }
 
 void get_payload_and_packet_size (uint16_t* length, uint8_t* packet_buffer) {
-  uint32_t count, mu_len;
+    uint32_t count, mu_len;
 	__mem uint8_t* payload;
 
 	if (pif_pkt_info_global.split) { /* payload split to MU */
@@ -859,7 +843,7 @@ void get_payload_and_packet_size (uint16_t* length, uint8_t* packet_buffer) {
 }
 
 void set_packet_size_and_payload(uint8_t* packet_buffer){
-  uint32_t count, mu_len, length;
+    uint32_t count, mu_len, length;
 	__mem uint8_t* payload;
 
 	if (pif_pkt_info_global.split) { /* payload split to MU */
@@ -906,14 +890,14 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	__mem encrypt_me_result result;
 
 	int i;
-  uint16_t length;
+    uint16_t length;
 	uint16_t encryptMeOffset;
-  uint16_t originalDataSize;
-  uint16_t originalContentTLVOffset;
-  uint16_t amountOfPaddingBytesForEncryptedContent;
-  uint16_t sizeOfEncryptMeHeaderTL;
-  uint16_t contentIncreaseDueToEncryption;
-  uint16_t correctedOriginalDataSize;
+    uint16_t originalDataSize;
+    uint16_t originalContentTLVOffset;
+    uint16_t amountOfPaddingBytesForEncryptedContent;
+    uint16_t sizeOfEncryptMeHeaderTL;
+    uint16_t contentIncreaseDueToEncryption;
+    uint16_t correctedOriginalDataSize;
 	uint16_t sizeOfContentTLVAfterEncryption;
 	uint16_t signatureTLVSize;
 	short signatureTLVSizeDifference;
@@ -985,8 +969,8 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	sizeOfEncryptMeHeaderTL = encryptMeOffset;
 
-  // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
-  contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
+    // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
+     contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
   // Update the data TLV size with the amount we are going to add in the encryption proces
 	result.dataSize += contentIncreaseDueToEncryption;
@@ -994,10 +978,10 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	memmove_mem_mem(encrypt_input_buffer, result.contentTLVStartPosition, result.contentTLVSize);
 
-  // Copy this state of the variable for moving over everything after the content
-  correctedOriginalDataSize = originalDataSize;
+    // Copy this state of the variable for moving over everything after the content
+    correctedOriginalDataSize = originalDataSize;
 
-  aes_encrypt((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
+    aes_encrypt((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
     		(uint8_t *) encrypt_input_buffer,
     		result.contentTLVSize);
 
@@ -1063,7 +1047,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
-	sha256((uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
+	//sha256((uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
 
 #ifndef ECLIPSE
     length_inc = result.dataTLVSize - length;
