@@ -502,7 +502,7 @@ static void XorWithIv(__mem uint8_t* buf)
   uint8_t i;
   for (i = 0; i < BLOCKLEN; ++i) //WAS for(i = 0; i < KEYLEN; ++i) but the block in AES is always 128bit so 16 bytes!
   {
-    buf[i] ^= Iv[i];
+    *(buf++) ^= *(Iv++);
   }
 }
 
@@ -539,7 +539,7 @@ void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_
 /* SHA Functions*/
 void sha256_transform(__mem SHA256_CTX *ctx, __mem const BYTE data[])
 {
-	__mem WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+	WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
 
 	for (i = 0, j = 0; i < 16; ++i, j += 4)
 		m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
@@ -609,7 +609,7 @@ void sha256_update(__mem SHA256_CTX *ctx, __mem const BYTE data[], size_t len)
 
 void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 {
-	__mem WORD i;
+	WORD i;
 
 	i = ctx->datalen;
 
@@ -655,11 +655,11 @@ void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 
 /* End of SHA functions */
 
-static int tlv_len_offset(uint8_t *buff, int currpos, __mem uint32_t *TLVlen, __mem uint32_t *TLVlenK){
+static int tlv_len_offset(uint8_t*  buff, int currpos, __mem uint32_t *TLVlen, __mem uint32_t *TLVlenK){
 	uint8_t len0 = buff[currpos++]; //get length and advance
 	uint32_t len = 0;
 	uint8_t lenK = 1;
-    uint8_t i = 0;
+  uint8_t i;
 
 	if (len0 < 253){
 		len = len0;
@@ -690,27 +690,27 @@ static int tlv_len_offset(uint8_t *buff, int currpos, __mem uint32_t *TLVlen, __
 	return 0;
 }
 
-uint32_t extract_value_at_position(uint8_t* buf, uint32_t length){
-	int i = 0;
+uint32_t extract_value_at_position(uint8_t* buf, uint16_t length){
+	int i;
 	uint32_t value = 0;
 	for( i = 0; i < length; i++){
-		value = value * 256 + buf[i];
+		value = value * 256 + *(buf++);
 	}
 	return value;
 }
 
-int get_type(uint8_t* buf, __mem uint32_t *type, __mem uint32_t *type_size){
+int __forceinline get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
 	return(tlv_len_offset(buf, 0, type, type_size));
 }
 
-int get_length(uint8_t* buf, uint32_t offset, __mem uint32_t *length, __mem uint32_t *length_size){
+int __forceinline get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length_size){
 	return(tlv_len_offset(buf, offset, length, length_size));
 }
 
 int get_encrypt_me_header_content(uint8_t* buf, __mem encrypt_me_result *encrypt_me_header){
-    uint32_t currentPosition = 0;
-    uint32_t start_unencrypted_position = 0;
-    __mem uint32_t type =0 , type_size =0  , length_size = 0, length =0;
+  uint32_t currentPosition = 0;
+  uint32_t start_unencrypted_position = 0;
+  uint32_t type =0 , type_size =0  , length_size = 0, length =0;
 
 	get_type(buf+currentPosition, &type, &type_size);
 
@@ -818,29 +818,28 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 {
 	#ifndef ECLIPSE
-	uint32_t mu_len, ctm_len;
+	 uint32_t mu_len, ctm_len;
     __mem uint8_t *payload;
     PIF_PLUGIN_udp_T *udp;
     PIF_PLUGIN_ipv4_T *ipv4;
     short length_inc;
 	#endif
 
-
-    uint16_t length;
-    __lmem uint32_t count;
-	__mem encrypt_me_result result = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-	__lmem uint16_t encryptMeOffset = 0;
-    int i;
-    uint16_t originalDataSize = 0;
-    uint16_t originalContentTLVOffset = 0;
-    uint16_t amountOfPaddingBytesForEncryptedContent = 0;
-    uint16_t sizeOfEncryptMeHeaderTL = 0;
-    uint16_t contentIncreaseDueToEncryption = 0;
-    uint16_t correctedOriginalDataSize = 0;
-	uint16_t sizeOfContentTLVAfterEncryption = 0;
-	uint16_t signatureTLVSize = 0;
-	short signatureTLVSizeDifference = 0;
-	uint16_t dataTLVValueStartOffset = 0;
+	__mem encrypt_me_result result;
+	int i;
+  uint16_t length;
+  uint32_t count;
+	uint16_t encryptMeOffset;
+  uint16_t originalDataSize;
+  uint16_t originalContentTLVOffset;
+  uint16_t amountOfPaddingBytesForEncryptedContent;
+  uint16_t sizeOfEncryptMeHeaderTL;
+  uint16_t contentIncreaseDueToEncryption;
+  uint16_t correctedOriginalDataSize;
+	uint16_t sizeOfContentTLVAfterEncryption;
+	uint16_t signatureTLVSize;
+	short signatureTLVSizeDifference;
+	uint16_t dataTLVValueStartOffset;
 
 #ifndef ECLIPSE
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
@@ -930,7 +929,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	encrypt_me_tlv_buffer[0] = 0xfd;
 	encrypt_me_tlv_buffer[1] = 0x80;
 	encrypt_me_tlv_buffer[2] = 0xeb;
-	encryptMeOffset += 3;
+	encryptMeOffset = 3;
 
 	// Determine the amount of bytes needed to encode the (L)ength part (EncryptedContent TLV)
 	if(sizeOfContentTLVAfterEncryption < 253){
@@ -944,7 +943,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	}
 	sizeOfContentTLVAfterEncryption += encryptMeOffset;
 
-	sizeOfEncryptMeHeaderTL += encryptMeOffset;
+	sizeOfEncryptMeHeaderTL = encryptMeOffset;
 
 
 	// Copy iv to the start of the output buffer
@@ -953,12 +952,12 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	//   encrypt_me_tlv_buffer[i + encryptMeOffset] = iv[i];
     //}
 
-    memmove_mem_mem(encrypt_me_tlv_buffer + encryptMeOffset, iv, BLOCKLEN);
-    // Compensate the offset for iv by adding BLOCKLEN
-    encryptMeOffset += BLOCKLEN;
+  memmove_mem_mem(encrypt_me_tlv_buffer + encryptMeOffset, iv, BLOCKLEN);
+  // Compensate the offset for iv by adding BLOCKLEN
+  encryptMeOffset += BLOCKLEN;
 
-    // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
-    contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
+  // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
+  contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
     // Update the data TLV size with the amount we are going to add in the encryption proces
 	result.dataSize += contentIncreaseDueToEncryption;
@@ -1037,9 +1036,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
-	sha256_init(&sha_context);
-	sha256_update(&sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
-	sha256_final(&sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
+	//sha256_init(&sha_context);
+	//sha256_update(&sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
+	//sha256_final(&sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
 
 
 

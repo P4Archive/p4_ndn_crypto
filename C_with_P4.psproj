@@ -101,10 +101,10 @@
                         "include_paths": [], 
                         "mac_ingress_timestamp": false, 
                         "mc_init": false, 
-                        "multicast_group_count": 16, 
+                        "multicast_group_count": 0, 
                         "multicast_group_size": 16, 
                         "nfd_enabled": true, 
-                        "num_assign_worker_mes": 78, 
+                        "num_assign_worker_mes": 80, 
                         "obj_target": false, 
                         "p4_user_config": ".\\rules.p4cfg", 
                         "reduced_thread_usage": true, 
@@ -243,6 +243,9 @@
                         "i38.tg4": [
                             "pif_app_nfd.list"
                         ], 
+                        "i38.tg5": [
+                            "pif_app_nfd.list"
+                        ], 
                         "i4.me0": [
                             "nfd_pcie0_pci_out_me0.list"
                         ], 
@@ -280,14 +283,14 @@
                     "settings": {
                         "additional_options": "-emu_cache_as_ddr.i26", 
                         "chip_name": "<unnamed>", 
-                        "debug_info": false, 
+                        "debug_info": true, 
                         "elf_64": true, 
                         "fill": "default", 
                         "fill_enable": false, 
                         "gen_mem_map_file": true, 
                         "gen_seg_h_file": false, 
                         "insert_nffwmip": true, 
-                        "insert_rt_syms": false, 
+                        "insert_rt_syms": true, 
                         "island_partial_fw_map": {
                             "i8": "catamaran", 
                             "i9": "catamaran"
@@ -389,7 +392,7 @@
                         "num_contexts": 8, 
                         "obj_target": false, 
                         "optimize": 2, 
-                        "spill_control": 0, 
+                        "spill_control": 3, 
                         "warning_level": 3
                     }, 
                     "target": "list", 
@@ -1130,7 +1133,7 @@
                     "tool": "compiler"
                 }, 
                 ".\\out\\pif_app_nfd.list\\pif_app_nfd.list": {
-                    "build_required": false, 
+                    "build_required": true, 
                     "input_files": {
                         "c_source_files": [
                             "$(SDKDIR)\\p4\\components\\nfp_pif\\me\\apps\\common\\src\\pif_app_nfd.c", 
@@ -1188,16 +1191,16 @@
                         "ext_obj_files": [], 
                         "obj_files": []
                     }, 
-                    "list_type": "user", 
+                    "list_type": "application", 
                     "settings": {
-                        "additional_options": "-Qno_decl_volatile -mIPOPT_nfp=2 -Qperfinfo=1", 
+                        "additional_options": "-Qno_decl_volatile -mIPOPT_nfp=2", 
                         "alloc_microstore_size": 8192, 
                         "allow_mixing_with_other_modules": false, 
                         "asm_code_file": false, 
                         "command_line": "", 
                         "context_mode": 4, 
                         "cycle_utilization": 100, 
-                        "debug_info": false, 
+                        "debug_info": true, 
                         "define": [
                             "PIF_APP_MASTER_ME=0x204"
                         ], 
@@ -1224,7 +1227,7 @@
                         "num_contexts": 4, 
                         "obj_target": false, 
                         "optimize": 2, 
-                        "spill_control": 6, 
+                        "spill_control": 3, 
                         "warning_level": 3
                     }, 
                     "target": "list", 
