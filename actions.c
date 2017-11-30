@@ -117,12 +117,10 @@ typedef struct {
 
 
 /****************************  ****************************/
-static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
 static __export __ctm uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
 static __export __ctm uint8_t encrypt_input_buffer[300];
 static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE + BLOCKLEN + BLOCKLEN + BUFFER_LENGTH_INCREASE + BUFFER_TYPE_INCREASE];
-static __export __ctm uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
-static __export __mem SHA256_CTX sha_context;
+
 
 #ifdef ECLIPSE
 static uint8_t payload[] = {0x06, 0xfd, 0x01, 0x9f, 0x07, 0x21, 0x08, 0x03, 0x6e, 0x64, 0x6e, 0x08, 0x03, 0x65, 0x64, 0x75, 0x08, 0x03, 0x75, 0x63, 0x69, 0x08, 0x04, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x0a, 0x31, 0x30, 0x36, 0x36, 0x32, 0x32, 0x37, 0x35, 0x30, 0x35, 0x14, 0x04, 0x19, 0x02, 0x03, 0xe8, 0xfd, 0x80, 0xe8, 0x0a, 0xfd, 0x80, 0xe9, 0x01, 0x77, 0xfd, 0x80, 0xea, 0x01, 0x88, 0x15, 0x16, 0x4e, 0x44, 0x4e, 0x20, 0x54, 0x4c, 0x56, 0x20, 0x50, 0x69, 0x6e, 0x67, 0x20, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x00, 0x16, 0x4a, 0x1b, 0x01, 0x01, 0x1c, 0x45, 0x07, 0x43, 0x08, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x08, 0x07, 0x64, 0x61, 0x65, 0x6d, 0x6f, 0x6e, 0x73, 0x08, 0x0c, 0x6e, 0x64, 0x6e, 0x2d, 0x74, 0x6c, 0x76, 0x2d, 0x70, 0x69, 0x6e, 0x67, 0x08, 0x03, 0x4b, 0x45, 0x59, 0x08, 0x11, 0x6b, 0x73, 0x6b, 0x2d, 0x31, 0x34, 0x30, 0x36, 0x34, 0x32, 0x31, 0x33, 0x38, 0x33, 0x36, 0x35, 0x33, 0x08, 0x07, 0x49, 0x44, 0x2d, 0x43, 0x45, 0x52, 0x54, 0x17, 0xfd, 0x01, 0x00, 0x31, 0x8b, 0x4b, 0x84, 0x50, 0xc0, 0xfa, 0x62, 0x95, 0xbb, 0x53, 0x50, 0xf7, 0xbf, 0x3d, 0xc0, 0xe5, 0xe6, 0x3d, 0x43, 0x48, 0x07, 0x30, 0x59, 0xfa, 0xd3, 0xbd, 0xad, 0x5f, 0x13, 0xc0, 0x9b, 0xb4, 0x69, 0xb0, 0x3b, 0x7c, 0xe7, 0xb2, 0xaf, 0xde, 0x3d, 0x05, 0x1f, 0xe3, 0xb9, 0xb7, 0x10, 0x92, 0x34, 0xe3, 0x82, 0x5b, 0x5f, 0x13, 0xd4, 0x18, 0xb1, 0xe6, 0xe0, 0xbf, 0x07, 0x17, 0xb0, 0x49, 0x32, 0x49, 0xaa, 0xa2, 0x3e, 0x2f, 0xde, 0x47, 0x6a, 0x3c, 0x5a, 0x7a, 0xae, 0x85, 0xa9, 0xb3, 0xd4, 0x84, 0x15, 0x78, 0x78, 0xc3, 0x9a, 0x0e, 0x80, 0xb3, 0x89, 0x85, 0x6a, 0xd9, 0x45, 0xfc, 0xf1, 0x68, 0x88, 0xdc, 0x82, 0xea, 0xe3, 0x40, 0x49, 0x8e, 0xbe, 0xb1, 0x2c, 0x31, 0xb9, 0x25, 0x0e, 0x35, 0xb5, 0x35, 0xda, 0x33, 0xd5, 0x66, 0xdd, 0x07, 0xda, 0xd5, 0x41, 0xfd, 0xf0, 0xb4, 0x07, 0x8b, 0x53, 0x77, 0x50, 0x8c, 0xfe, 0xbf, 0x22, 0xfd, 0xfd, 0xff, 0xc6, 0x50, 0xc4, 0x9a, 0xc5, 0x2b, 0x36, 0xa3, 0x5f, 0x89, 0xa8, 0xcc, 0xbd, 0x1c, 0xd7, 0x25, 0x3a, 0x6e, 0x39, 0x89, 0xf3, 0xbe, 0x73, 0xcf, 0x00, 0xb8, 0x57, 0x34, 0xe9, 0x08, 0x0d, 0x70, 0xc8
@@ -534,8 +532,6 @@ void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_
   }
 
 }
-
-
 /* SHA Functions*/
 void sha256_transform(__mem SHA256_CTX *ctx, __mem const BYTE data[])
 {
@@ -703,7 +699,7 @@ int __forceinline get_type(uint8_t* buf, uint32_t *type, uint32_t *type_size){
 	return(tlv_len_offset(buf, 0, type, type_size));
 }
 
-int __forceinline get_length(uint8_t* buf, uint32_t offset, uint32_t *length, uint32_t *length_size){
+int __forceinline get_length(uint8_t* buf, uint32_t offset, __mem uint32_t *length, uint32_t *length_size){
 	return(tlv_len_offset(buf, offset, length, length_size));
 }
 
@@ -808,6 +804,91 @@ int get_encrypt_me_header_content(uint8_t* buf, __mem encrypt_me_result *encrypt
 	return 0;
 }
 
+void sha256(__mem const BYTE data[], size_t len, __mem BYTE hash[]){
+  __mem SHA256_CTX sha_context;
+
+	sha256_init(&sha_context);
+	sha256_update(&sha_context, data, len); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
+	sha256_final(&sha_context, hash);
+}
+
+void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
+	 __mem const uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+	const uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+	 // Copy iv to the start of the output buffer
+	memmove_mem_mem(output, iv, BLOCKLEN);
+	// Compensate the offset for iv by adding BLOCKLEN
+	AES_CBC_encrypt_buffer(output + BLOCKLEN, input, length, key, iv);
+}
+
+void get_payload_and_packet_size (uint16_t* length, uint8_t* packet_buffer) {
+  uint32_t count, mu_len;
+	__mem uint8_t* payload;
+
+	if (pif_pkt_info_global.split) { /* payload split to MU */
+			uint32_t sop; /* start of packet offset */
+			sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+			mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+	} else /* no data in MU */
+			mu_len = 0;
+
+	/* get the ctm byte count:
+	 * packet length - offset to parsed headers - byte_count_in_mu
+	 * Note: the parsed headers are always in ctm
+	 */
+	count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
+	/* Get a pointer to the ctm portion */
+	payload = pif_pkt_info_global.pkt_buf;
+	/* point to just beyond the parsed headers */
+	payload += pif_pkt_info_global.pkt_pl_off;
+
+	memmove_mem_mem(packet_buffer, payload, count);
+
+	*length = count; //prevent overwrite of beginning of buf
+
+	/* same as above, but for mu. Code duplicated as a manual unroll */
+	if (mu_len) {
+			payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+			/* Adjust payload size depending on the ctm size for the packet */
+			payload += 256 << pif_pkt_info_global.ctm_size;
+			count = mu_len;
+			memmove_mem_mem(packet_buffer + *length, payload, count);
+
+			*length += count;
+	}
+}
+
+void set_packet_size_and_payload(uint8_t* packet_buffer){
+  uint32_t count, mu_len, length;
+	__mem uint8_t* payload;
+
+	if (pif_pkt_info_global.split) { /* payload split to MU */
+			uint32_t sop; /* start of packet offset */
+			sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+			mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+	} else /* no data in MU */
+			mu_len = 0;
+
+	count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
+	/* Get a pointer to the ctm portion */
+	payload = pif_pkt_info_global.pkt_buf;
+	/* point to just beyond the parsed headers */
+	payload += pif_pkt_info_global.pkt_pl_off;
+
+	memmove_mem_mem(payload, packet_buffer, count);
+
+	length = count; //prevent overwrite of beginning of buf
+
+	/* same as above, but for mu. Code duplicated as a manual unroll */
+	if (mu_len) {
+			payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+			/* Adjust payload size depending on the ctm size for the packet */
+			payload += 256 << pif_pkt_info_global.ctm_size;
+			count = mu_len;
+
+			memmove_mem_mem(payload, packet_buffer + length, count);
+	}
+}
 
 #ifndef ECLIPSE
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
@@ -815,20 +896,17 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #else
 	int main()
 #endif
-
 {
 	#ifndef ECLIPSE
-	 uint32_t mu_len, ctm_len;
-    __mem uint8_t *payload;
     PIF_PLUGIN_udp_T *udp;
     PIF_PLUGIN_ipv4_T *ipv4;
     short length_inc;
 	#endif
 
 	__mem encrypt_me_result result;
+
 	int i;
   uint16_t length;
-  uint32_t count;
 	uint16_t encryptMeOffset;
   uint16_t originalDataSize;
   uint16_t originalContentTLVOffset;
@@ -855,45 +933,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
          return PIF_PLUGIN_RETURN_DROP;
     }
 
-    if (pif_pkt_info_global.split) { /* payload split to MU */
-        uint32_t sop; /* start of packet offset */
-        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
-        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
-    } else /* no data in MU */
-        mu_len = 0;
-
-    /* get the ctm byte count:
-     * packet length - offset to parsed headers - byte_count_in_mu
-     * Note: the parsed headers are always in ctm
-     */
-    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
-    /* Get a pointer to the ctm portion */
-    payload = pif_pkt_info_global.pkt_buf;
-    /* point to just beyond the parsed headers */
-    payload += pif_pkt_info_global.pkt_pl_off;
-
-    memmove_mem_mem(packet_buffer, payload, count);
-
-    //for (i = 0; i < count; i++) {
-    //       packet_buffer[i]=payload[i];
-    //}
-
-    length = count; //prevent overwrite of beginning of buf
-
-    /* same as above, but for mu. Code duplicated as a manual unroll */
-    if (mu_len) {
-        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-        /* Adjust payload size depending on the ctm size for the packet */
-        payload += 256 << pif_pkt_info_global.ctm_size;
-        count = mu_len;
-        memmove_mem_mem(packet_buffer + length, payload, count);
-
-
-        //for (i = 0; i < count; i++) {
-        //   packet_buffer[length+i]=payload[i];
-        //}
-        length += count;
-    }
+		get_payload_and_packet_size(&length, packet_buffer);
 #else
     for (i = 0; i < sizeof(payload); i++) {
              packet_buffer[i]=payload[i];
@@ -902,9 +942,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #endif
 
 
-    if(get_encrypt_me_header_content((uint8_t *)packet_buffer, &result) != 0){
-    		return PIF_PLUGIN_RETURN_DROP;
-   	}
+  if(get_encrypt_me_header_content((uint8_t *)packet_buffer, &result) != 0){
+  		return PIF_PLUGIN_RETURN_DROP;
+ 	}
 
 	// Calculate the new lengths of the SignatureInfo and SignatureValue TLVs
 	signatureTLVSize = NEW_SIGNATURE_SIZE;
@@ -945,34 +985,21 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	sizeOfEncryptMeHeaderTL = encryptMeOffset;
 
-
-	// Copy iv to the start of the output buffer
-
-    //for (i = 0; i < BLOCKLEN; i++) {
-	//   encrypt_me_tlv_buffer[i + encryptMeOffset] = iv[i];
-    //}
-
-  memmove_mem_mem(encrypt_me_tlv_buffer + encryptMeOffset, iv, BLOCKLEN);
-  // Compensate the offset for iv by adding BLOCKLEN
-  encryptMeOffset += BLOCKLEN;
-
   // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
   contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
-    // Update the data TLV size with the amount we are going to add in the encryption proces
+  // Update the data TLV size with the amount we are going to add in the encryption proces
 	result.dataSize += contentIncreaseDueToEncryption;
 	result.dataTLVSize += contentIncreaseDueToEncryption;
 
 	memmove_mem_mem(encrypt_input_buffer, result.contentTLVStartPosition, result.contentTLVSize);
 
-    // Copy this state of the variable for moving over everything after the content
-    correctedOriginalDataSize = originalDataSize;
+  // Copy this state of the variable for moving over everything after the content
+  correctedOriginalDataSize = originalDataSize;
 
-    AES_CBC_encrypt_buffer((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
+  aes_encrypt((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
     		(uint8_t *) encrypt_input_buffer,
-    		result.contentTLVSize,
-    		(uint8_t*) key,
-    		(uint8_t*) iv);
+    		result.contentTLVSize);
 
     // Check value for L field of the Data TLV, if encoding is increased, do make_space
 	if(result.dataSize < 253 && originalDataSize < 253){ // Size did not change after encryption
@@ -1036,11 +1063,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
-	//sha256_init(&sha_context);
-	//sha256_update(&sha_context, (uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize); // Start at the first byte of the (V) part of the Data TLV, dont use signature itself for calculation
-	//sha256_final(&sha_context, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
-
-
+	sha256((uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
 
 #ifndef ECLIPSE
     length_inc = result.dataTLVSize - length;
@@ -1050,44 +1073,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         pif_pkt_free_space(result.signatureStartOffset, -length_inc); // Remove space, since packet has decreased in size
     }
 
-    if (pif_pkt_info_global.split) { /* payload split to MU */
-        uint32_t sop; /* start of packet offset */
-        sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
-        mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
-    } else /* no data in MU */
-        mu_len = 0;
-
-    count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
-    /* Get a pointer to the ctm portion */
-    payload = pif_pkt_info_global.pkt_buf;
-    /* point to just beyond the parsed headers */
-    payload += pif_pkt_info_global.pkt_pl_off;
-
-
-    memmove_mem_mem(payload, packet_buffer, count);
-    // for (i = 0; i < count; i++) {
-    //    payload[i]=packet_buffer[i];
-    // }
-
-    length = count; //prevent overwrite of beginning of buf
-
-    /* same as above, but for mu. Code duplicated as a manual unroll */
-    if (mu_len) {
-        payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-        /* Adjust payload size depending on the ctm size for the packet */
-        payload += 256 << pif_pkt_info_global.ctm_size;
-        count = mu_len;
-
-        memmove_mem_mem(payload, packet_buffer + length, count);
-
-        // for (i = 0; i < count; i++) {
-        //   payload[i]=packet_buffer[length+i];
-        //}
-    }
+		set_packet_size_and_payload(packet_buffer);
 
     ipv4->totalLen += length_inc;
-
-
     udp = pif_plugin_hdr_get_udp(headers);
     udp->len += length_inc;
 #else
