@@ -115,10 +115,6 @@ typedef struct {
 
 } encrypt_me_result;
 
-/* ***************************  *************************** */
-volatile __export __mem uint32_t pif_mu_len = 0;
-static __export __ctm uint32_t count;
-/****************************  ****************************/
 
 /****************************  ****************************/
 static __export __ctm uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }; //goes local
@@ -831,7 +827,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 
     uint16_t length;
-
+    __lmem uint32_t count;
 	__mem encrypt_me_result result = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	__lmem uint16_t encryptMeOffset = 0;
     int i;
@@ -867,9 +863,6 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     } else /* no data in MU */
         mu_len = 0;
 
-    /* debug info for mu_split */
-    pif_mu_len = mu_len;
-
     /* get the ctm byte count:
      * packet length - offset to parsed headers - byte_count_in_mu
      * Note: the parsed headers are always in ctm
@@ -880,10 +873,11 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     /* point to just beyond the parsed headers */
     payload += pif_pkt_info_global.pkt_pl_off;
 
+    memmove_mem_mem(packet_buffer, payload, count);
 
-    for (i = 0; i < count; i++) {
-           packet_buffer[i]=payload[i];
-    }
+    //for (i = 0; i < count; i++) {
+    //       packet_buffer[i]=payload[i];
+    //}
 
     length = count; //prevent overwrite of beginning of buf
 
@@ -893,10 +887,13 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         /* Adjust payload size depending on the ctm size for the packet */
         payload += 256 << pif_pkt_info_global.ctm_size;
         count = mu_len;
-        for (i = 0; i < count; i++) {
-           packet_buffer[length+i]=payload[i];
-        }
-        length=length+count;
+        memmove_mem_mem(packet_buffer + length, payload, count);
+
+
+        //for (i = 0; i < count; i++) {
+        //   packet_buffer[length+i]=payload[i];
+        //}
+        length += count;
     }
 #else
     for (i = 0; i < sizeof(payload); i++) {
@@ -949,11 +946,14 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	sizeOfEncryptMeHeaderTL += encryptMeOffset;
 
-	// Copy iv to the start of the output buffer
-    for (i = 0; i < BLOCKLEN; i++) {
-	   encrypt_me_tlv_buffer[i + encryptMeOffset] = iv[i];
-    }
 
+	// Copy iv to the start of the output buffer
+
+    //for (i = 0; i < BLOCKLEN; i++) {
+	//   encrypt_me_tlv_buffer[i + encryptMeOffset] = iv[i];
+    //}
+
+    memmove_mem_mem(encrypt_me_tlv_buffer + encryptMeOffset, iv, BLOCKLEN);
     // Compensate the offset for iv by adding BLOCKLEN
     encryptMeOffset += BLOCKLEN;
 
@@ -1058,17 +1058,17 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     } else /* no data in MU */
         mu_len = 0;
 
-    /* debug info for mu_split */
-    pif_mu_len = mu_len;
     count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
     /* Get a pointer to the ctm portion */
     payload = pif_pkt_info_global.pkt_buf;
     /* point to just beyond the parsed headers */
     payload += pif_pkt_info_global.pkt_pl_off;
 
-    for (i = 0; i < count; i++) {
-        payload[i]=packet_buffer[i];
-    }
+
+    memmove_mem_mem(payload, packet_buffer, count);
+    // for (i = 0; i < count; i++) {
+    //    payload[i]=packet_buffer[i];
+    // }
 
     length = count; //prevent overwrite of beginning of buf
 
@@ -1078,9 +1078,12 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         /* Adjust payload size depending on the ctm size for the packet */
         payload += 256 << pif_pkt_info_global.ctm_size;
         count = mu_len;
-        for (i = 0; i < count; i++) {
-           payload[i]=packet_buffer[length+i];
-        }
+
+        memmove_mem_mem(payload, packet_buffer + length, count);
+
+        // for (i = 0; i < count; i++) {
+        //   payload[i]=packet_buffer[length+i];
+        //}
     }
 
     ipv4->totalLen += length_inc;
