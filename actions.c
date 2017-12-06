@@ -199,7 +199,7 @@ static state_t* state;
 static __export __ctm uint8_t RoundKey[keyExpSize];
 
 // The Key input to the AES Program
-static const uint8_t* Key;
+static const __mem uint8_t* Key;
 
 // Initial Vector used only for CBC mode
 static __mem uint8_t* Iv;
@@ -499,7 +499,7 @@ static __forceinline void XorWithIv(__mem uint8_t* buf)
   }
 }
 
-void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_t length, const uint8_t* key, __mem const uint8_t* iv)
+void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_t length, __mem const uint8_t* key, __mem const uint8_t* iv)
 {
   uint32_t i;
 
@@ -805,7 +805,7 @@ void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
 	AES_CBC_encrypt_buffer(output + BLOCKLEN, input, length, key, iv);
 }
 
-void get_payload_and_packet_size (uint16_t* length, uint8_t* packet_buffer) {
+void get_payload_and_packet_size (uint16_t* length, __ctm uint8_t* packet_buffer) {
     uint32_t count, mu_len;
 	__mem uint8_t* payload;
 
@@ -842,7 +842,7 @@ void get_payload_and_packet_size (uint16_t* length, uint8_t* packet_buffer) {
 	}
 }
 
-void set_packet_size_and_payload(uint8_t* packet_buffer){
+void set_packet_size_and_payload(__ctm uint8_t* packet_buffer){
     uint32_t count, mu_len, length;
 	__mem uint8_t* payload;
 
@@ -917,7 +917,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
          return PIF_PLUGIN_RETURN_DROP;
     }
 
-		get_payload_and_packet_size(&length, packet_buffer);
+	get_payload_and_packet_size(&length, packet_buffer);
 #else
     for (i = 0; i < sizeof(payload); i++) {
              packet_buffer[i]=payload[i];
@@ -970,9 +970,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	sizeOfEncryptMeHeaderTL = encryptMeOffset;
 
     // The increase of size is: the T and L part of the encrypt me header, the amount of padding bytes we added for encryption, and the IV (which is equal to BLOCKLEN)
-     contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
+    contentIncreaseDueToEncryption = sizeOfEncryptMeHeaderTL + amountOfPaddingBytesForEncryptedContent + BLOCKLEN;
 
-  // Update the data TLV size with the amount we are going to add in the encryption proces
+    // Update the data TLV size with the amount we are going to add in the encryption proces
 	result.dataSize += contentIncreaseDueToEncryption;
 	result.dataTLVSize += contentIncreaseDueToEncryption;
 
@@ -1057,7 +1057,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
         pif_pkt_free_space(result.signatureStartOffset, -length_inc); // Remove space, since packet has decreased in size
     }
 
-		set_packet_size_and_payload(packet_buffer);
+	set_packet_size_and_payload(packet_buffer);
 
     ipv4->totalLen += length_inc;
     udp = pif_plugin_hdr_get_udp(headers);
