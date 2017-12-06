@@ -905,10 +905,13 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 #ifndef ECLIPSE
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
+    
 
+/*
     if(ipv4->mf_flag == 1){
         return PIF_PLUGIN_RETURN_DROP;
     }
+*/
     if(ipv4->fragOffset > 0 ){
         return PIF_PLUGIN_RETURN_DROP;
     }
@@ -1065,6 +1068,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #else
     print_buf(packet_buffer, sizeof(packet_buffer));
 #endif
+    PIF_FLCALC_UPD_INCR_CLEAR(0); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation
     return PIF_PLUGIN_RETURN_FORWARD;
 
 

@@ -1,7 +1,6 @@
 #define ETHERTYPE_IPV4 0x0800
 #define IPPROTO_UDP 17
 
-
 header_type ethernet_t {
   fields {
     dstAddr   : 48;
@@ -17,9 +16,7 @@ header_type ipv4_t {
         diffserv : 8;
         totalLen : 16;
         identification : 16;
-        reserved_flag : 1;
-        df_flag : 1;
-        mf_flag : 1;
+        flags : 3;
         fragOffset : 13;
         ttl : 8;
         protocol : 8;
@@ -38,9 +35,12 @@ header_type udp_t {
     }
 }
 
+
+parser start {
+  return parse_ethernet;
+}
+
 header ethernet_t ethernet;
-header ipv4_t ipv4;
-header udp_t udp;
 
 parser parse_ethernet {
   extract(ethernet);
@@ -48,6 +48,38 @@ parser parse_ethernet {
     ETHERTYPE_IPV4:    parse_ipv4;
     default:  ingress;
   }
+}
+
+header ipv4_t ipv4;
+
+field_list ipv4_checksum_list {
+        ipv4.version;
+        ipv4.ihl;
+        ipv4.diffserv;
+        ipv4.totalLen;
+        ipv4.identification;
+        ipv4.flags;
+        ipv4.fragOffset;
+        ipv4.ttl;
+        ipv4.protocol;
+        ipv4.srcAddr;
+        ipv4.dstAddr;
+}
+
+field_list_calculation ipv4_checksum {
+    input {
+        ipv4_checksum_list;
+    }
+    algorithm : csum16;
+    output_width : 16;
+}
+
+
+calculated_field ipv4.hdrChecksum  {
+
+    verify ipv4_checksum;
+    update ipv4_checksum;
+
 }
 
 parser parse_ipv4 {
@@ -58,16 +90,39 @@ parser parse_ipv4 {
   }
 }
 
+
+header udp_t udp;
+
 parser parse_udp {
   extract(udp);
   return ingress;
 }
 
 
-parser start {
-  return parse_ethernet;
+field_list udp_checksum_list {
+    ipv4.srcAddr;
+    ipv4.dstAddr;
+    8'0;
+    ipv4.protocol;
+    udp.len;
+    udp.srcPort;
+    udp.dstPort;
+    udp.len;
+    udp.checksum;
+    payload;
 }
 
+field_list_calculation udp_checksum {
+    input {
+        udp_checksum_list;
+    }
+    algorithm : csum16;
+    output_width : 16;
+}
+
+calculated_field udp.checksum {
+    update udp_checksum;
+}
 
 primitive_action payload_scan();
 
@@ -78,11 +133,12 @@ action act_drop(){
 
 action act_modify_and_send(port){
   payload_scan();
-  modify_field (standard_metadata.egress_spec, port);
+  modify_field(udp.checksum, udp.len);
+  modify_field(standard_metadata.egress_spec, port);
 }
 
 action act_do_forward(espec) {
-    modify_field(standard_metadata.egress_spec, espec);
+   modify_field(standard_metadata.egress_spec, espec);
 }
 
 table tbl_forward_udp {
@@ -102,7 +158,7 @@ table tbl_drop {
 
 
 control ingress {
-    if(valid(udp)){
+   if(valid(udp)){
         apply(tbl_forward_udp);
    } else {
        apply(tbl_drop);
