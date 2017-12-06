@@ -1068,7 +1068,8 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #else
     print_buf(packet_buffer, sizeof(packet_buffer));
 #endif
-    PIF_FLCALC_UPD_INCR_CLEAR(0); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation
+    PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_UDP_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for UDP
+    PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_IPV4_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for IP
     return PIF_PLUGIN_RETURN_FORWARD;
 
 
