@@ -283,7 +283,7 @@ void print_buf(uint8_t* buf, size_t size){
 /*****************************************************************************/
 /* Private functions:                                                        */
 /*****************************************************************************/
-static uint8_t getSBoxValue(uint8_t num)
+static __forceinline uint8_t getSBoxValue(uint8_t num)
 {
   return sbox[num];
 }
@@ -1087,7 +1087,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
 	//sha256((uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
-
+    memset_mem((uint8_t *) (packet_buffer + result.signatureStartOffset + 7),0xab, SHA256_BLOCK_SIZE);
 #ifndef ECLIPSE
     length_inc = result.dataTLVSize - length;
     if(length_inc > 0) {
