@@ -802,7 +802,14 @@ void sha256(__mem const BYTE data[], size_t len, __mem BYTE hash[]){
 
 void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
     int i;
-	 // Copy iv to the start of the output buffer
+    int amount_of_padding = BLOCKLEN - (length % BLOCKLEN);
+
+    for(i = 0; i < amount_of_padding; i++ ) {
+        input[i + length] = 0x0;
+    }
+    
+    // input + length
+    // Copy iv to the start of the output buffer
     for (i = 0; i < BLOCKLEN; i++) {
 	   output[i] = iv[i];
     }
