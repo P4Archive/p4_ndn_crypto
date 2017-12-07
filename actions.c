@@ -833,13 +833,13 @@ void get_payload_and_packet_size (uint16_t* length, __ctm uint8_t* packet_buffer
 
 	/* same as above, but for mu. Code duplicated as a manual unroll */
 	if (mu_len) {
-			payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-			/* Adjust payload size depending on the ctm size for the packet */
-			payload += 256 << pif_pkt_info_global.ctm_size;
-			count = mu_len;
-			memmove_mem_mem(packet_buffer + *length, payload, count);
+		payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+		/* Adjust payload size depending on the ctm size for the packet */
+		payload += 256 << pif_pkt_info_global.ctm_size;
+		count = mu_len;
+		memmove_mem_mem(packet_buffer + *length, payload, count);
 
-			*length += count;
+		*length += count;
 	}
 }
 #endif
@@ -850,12 +850,12 @@ void set_packet_size_and_payload(__ctm uint8_t* packet_buffer){
 	__mem uint8_t* payload;
 
 	if (pif_pkt_info_global.split) { /* payload split to MU */
-			uint32_t sop; /* start of packet offset */
-			sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
-			mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
-	} else /* no data in MU */
-			mu_len = 0;
-
+		uint32_t sop; /* start of packet offset */
+		sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+		mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+	} else { /* no data in MU */
+		mu_len = 0;
+	}
 	count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
 	/* Get a pointer to the ctm portion */
 	payload = pif_pkt_info_global.pkt_buf;
@@ -910,7 +910,6 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #ifndef ECLIPSE
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
 
-
 /*
     if(ipv4->mf_flag == 1){
         return PIF_PLUGIN_RETURN_DROP;
@@ -927,7 +926,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	get_payload_and_packet_size(&length, packet_buffer);
 #else
     for (i = 0; i < sizeof(payload); i++) {
-             packet_buffer[i]=payload[i];
+        packet_buffer[i]=payload[i];
       }
     length=sizeof(payload);
 #endif
@@ -983,14 +982,16 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	result.dataSize += contentIncreaseDueToEncryption;
 	result.dataTLVSize += contentIncreaseDueToEncryption;
 
-	memmove_mem_mem(encrypt_input_buffer, result.contentTLVStartPosition, result.contentTLVSize);
+	memmove_mem_mem(encrypt_input_buffer,
+					result.contentTLVStartPosition,
+					result.contentTLVSize);
 
     // Copy this state of the variable for moving over everything after the content
     correctedOriginalDataSize = originalDataSize;
 
     aes_encrypt((uint8_t*)(encrypt_me_tlv_buffer + encryptMeOffset),
-    		(uint8_t *) encrypt_input_buffer,
-    		result.contentTLVSize);
+    			(uint8_t *) encrypt_input_buffer,
+    			result.contentTLVSize);
 
     // Check value for L field of the Data TLV, if encoding is increased, do make_space
 	if(result.dataSize < 253 && originalDataSize < 253){ // Size did not change after encryption
@@ -1010,7 +1011,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 		result.contentTLVOffset += 2;
 		dataTLVValueStartOffset = 4;
 		// call make space function with 2 bytes
-		memmove_mem_mem(packet_buffer + 3, packet_buffer + 1, originalDataSize - 1);
+		memmove_mem_mem(packet_buffer + 3,
+						packet_buffer + 1,
+						originalDataSize - 1);
 	} else if (result.dataSize >= 253 && originalDataSize >= 253) { // Size was already encoded in multiple bytes, no make space necessary
 		packet_buffer[1] = 0xfd;
 		packet_buffer[2] = (result.dataSize >> 8);
@@ -1025,7 +1028,9 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 		result.encryptMeHeaderStartPosition -= 2;
 		result.contentTLVOffset -= 2;
 		dataTLVValueStartOffset = 2; // One for Type, One of Length
-		memmove_mem_mem((packet_buffer + 2),(packet_buffer + 4), originalDataSize - 2); // call remove space function with 2 bytes
+		memmove_mem_mem((packet_buffer + 2),
+						(packet_buffer + 4),
+						originalDataSize - 2); // call remove space function with 2 bytes
 	}
 
 	// call make space function with contentIncreaseDueToEncryption as size
@@ -1034,13 +1039,16 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	// Move the signature
 	memmove_mem_mem((packet_buffer + result.signatureStartOffset + contentIncreaseDueToEncryption),
-			(packet_buffer + result.signatureStartOffset), correctedOriginalDataSize - result.signatureStartOffset);
+					(packet_buffer + result.signatureStartOffset),
+					correctedOriginalDataSize - result.signatureStartOffset);
 
 	// The offset of the signature TLV changes due to creating space with contentIncreaseDueToEncryption as amount
 	result.signatureStartOffset += contentIncreaseDueToEncryption;
 
 	// Copy encrypted content into the packet buffer
-	memmove_mem_mem((packet_buffer + originalContentTLVOffset), (encrypt_me_tlv_buffer), sizeOfContentTLVAfterEncryption);
+	memmove_mem_mem((packet_buffer + originalContentTLVOffset),
+					(encrypt_me_tlv_buffer),
+					sizeOfContentTLVAfterEncryption);
 
 	// Construct Signature Info TLV (Type=0x16, Length=0x3)
 	packet_buffer[result.signatureStartOffset] = 0x16;
@@ -1072,6 +1080,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_UDP_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for UDP
     PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_IPV4_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for IP
 #else
+    memset_mem(packet_buffer + result.dataTLVSize, 0, sizeof(packet_buffer) - result.dataTLVSize);
     print_buf(packet_buffer, sizeof(packet_buffer));
 #endif
 
