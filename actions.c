@@ -118,9 +118,9 @@ typedef struct {
 
 
 /****************************  ****************************/
-static __mem uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
-static __mem uint8_t encrypt_input_buffer[PAYLOAD_BUFFER_SIZE];
-static __mem uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE + BLOCKLEN + BLOCKLEN + BUFFER_LENGTH_INCREASE + BUFFER_TYPE_INCREASE];
+static __export __ctm uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
+static __export __ctm uint8_t encrypt_input_buffer[300];
+static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE + BLOCKLEN + BLOCKLEN + BUFFER_LENGTH_INCREASE + BUFFER_TYPE_INCREASE];
 
 
 #ifdef ECLIPSE
@@ -197,7 +197,7 @@ typedef uint8_t state_t[4][4];
 static state_t* state;
 
 // The array that stores the round keys.
-static  __mem uint8_t RoundKey[keyExpSize];
+static __export __ctm uint8_t RoundKey[keyExpSize];
 
 // The Key input to the AES Program
 static const __mem uint8_t* Key;
@@ -208,7 +208,7 @@ static __mem uint8_t* Iv;
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
 // The numbers below can be computed dynamically trading ROM for RAM -
 // This can be useful in (embedded) bootloader applications, where ROM is often limited.
-static  __mem const uint8_t sbox[256] = {
+static __export __ctm const uint8_t sbox[256] = {
   //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
   0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
   0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -227,7 +227,7 @@ static  __mem const uint8_t sbox[256] = {
   0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
   0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
 
-static  __mem const uint8_t rsbox[256] = {
+static __export __ctm const uint8_t rsbox[256] = {
   0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
   0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
   0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
@@ -247,11 +247,11 @@ static  __mem const uint8_t rsbox[256] = {
 
 // The round constant word array, Rcon[i], contains the values given by
 // x to th e power (i-1) being powers of x (x is denoted as {02}) in the field GF(2^8)
-static  __mem const uint8_t Rcon[11] = {
+static __export __ctm const uint8_t Rcon[11] = {
   0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
 
 /**************************** VARIABLES *****************************/
-static  __mem const WORD k[64] = {
+static __export __ctm const WORD k[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
 	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
 	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -283,7 +283,7 @@ void print_buf(uint8_t* buf, size_t size){
 /*****************************************************************************/
 /* Private functions:                                                        */
 /*****************************************************************************/
-static __forceinline uint8_t getSBoxValue(uint8_t num)
+static uint8_t getSBoxValue(uint8_t num)
 {
   return sbox[num];
 }
@@ -802,29 +802,27 @@ void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
 	 __mem uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
      int i;
 	 // Copy iv to the start of the output buffer
-	 // memmove_mem_mem(output, iv, BLOCKLEN);
-
     for (i = 0; i < BLOCKLEN; i++) {
 	   output[i] = iv[i];
     }
-
+	//memmove_mem_mem(output, iv, BLOCKLEN); Replaced by for loop again
 	// Compensate the offset for iv by adding BLOCKLEN
 	AES_CBC_encrypt_buffer(output + BLOCKLEN, input, length, key, iv);
 }
 #ifndef ECLIPSE
-uint16_t get_payload_and_packet_size (__mem uint8_t* packet_buffer) {
+uint16_t get_payload_and_packet_size (__ctm uint8_t* packet_buffer) {
     uint32_t count, mu_len;
     uint16_t length;
-    int i;
 	__mem uint8_t* payload;
+    int i;
 
 	if (pif_pkt_info_global.split) { /* payload split to MU */
 			uint32_t sop; /* start of packet offset */
 			sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
 			mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
-	} else {/* no data in MU */
+	} else /* no data in MU */
 			mu_len = 0;
-    }
+
 	/* get the ctm byte count:
 	 * packet length - offset to parsed headers - byte_count_in_mu
 	 * Note: the parsed headers are always in ctm
@@ -835,70 +833,71 @@ uint16_t get_payload_and_packet_size (__mem uint8_t* packet_buffer) {
 	/* point to just beyond the parsed headers */
 	payload += pif_pkt_info_global.pkt_pl_off;
 
-	//memmove_mem_mem(packet_buffer, payload, count); Replaced by below for loop
-
     for (i = 0; i < count; i++) {
-         packet_buffer[i] = payload[i];
+        packet_buffer[i] = payload[i];
     }
+
+	//memmove_mem_mem(packet_buffer, payload, count); Replaced by for loop
 
 	length = count; //prevent overwrite of beginning of buf
 
 	/* same as above, but for mu. Code duplicated as a manual unroll */
 	if (mu_len) {
-		payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-		/* Adjust payload size depending on the ctm size for the packet */
-		payload += 256 << pif_pkt_info_global.ctm_size;
-		count = mu_len;
-		//memmove_mem_mem(packet_buffer + *length, payload, count); Replaced by below for loop
+			payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+			/* Adjust payload size depending on the ctm size for the packet */
+			payload += 256 << pif_pkt_info_global.ctm_size;
+			count = mu_len;
+			//memmove_mem_mem(packet_buffer + length, payload, count);
+            for (i = 0; i < count; i++) {
+                packet_buffer[length+i]=payload[i];
+            }
 
-        for (i = 0; i < count; i++) {
-           packet_buffer[length + i] = payload[i];
-        }
-
-		length += count;
+			length += count;
 	}
     return length;
 }
 #endif
 
 #ifndef ECLIPSE
-void set_packet_size_and_payload(__mem uint8_t* packet_buffer){
+void set_packet_size_and_payload(__ctm uint8_t* packet_buffer){
     uint32_t count, mu_len, length;
 	__mem uint8_t* payload;
     int i;
 
 	if (pif_pkt_info_global.split) { /* payload split to MU */
-		uint32_t sop; /* start of packet offset */
-		sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
-		mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
+			uint32_t sop; /* start of packet offset */
+			sop = PIF_PKT_SOP(pif_pkt_info_global.pkt_buf, pif_pkt_info_global.pkt_num);
+			mu_len = pif_pkt_info_global.pkt_len - (256 << pif_pkt_info_global.ctm_size) + sop;
 	} else { /* no data in MU */
-		mu_len = 0;
-	}
+			mu_len = 0;
+    }
+
 	count = pif_pkt_info_global.pkt_len - pif_pkt_info_global.pkt_pl_off - mu_len;
 	/* Get a pointer to the ctm portion */
 	payload = pif_pkt_info_global.pkt_buf;
 	/* point to just beyond the parsed headers */
 	payload += pif_pkt_info_global.pkt_pl_off;
 
-	//memmove_mem_mem(payload, packet_buffer, count); Replaced by below for loop
 
     for (i = 0; i < count; i++) {
         payload[i] = packet_buffer[i];
     }
 
+	//memmove_mem_mem(payload, packet_buffer, count); Replaced by for loop
+
 	length = count; //prevent overwrite of beginning of buf
 
 	/* same as above, but for mu. Code duplicated as a manual unroll */
 	if (mu_len) {
-		payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-		/* Adjust payload size depending on the ctm size for the packet */
-		payload += 256 << pif_pkt_info_global.ctm_size;
-		count = mu_len;
+			payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+			/* Adjust payload size depending on the ctm size for the packet */
+			payload += 256 << pif_pkt_info_global.ctm_size;
+			count = mu_len;
 
-		//memmove_mem_mem(payload, packet_buffer + length, count); Replaced by below for loop
-        for (i = 0; i < count; i++) {
-            payload[i] = packet_buffer[length + i];
-        }
+            for (i = 0; i < count; i++) {
+               payload[i] = packet_buffer[length+i];
+            }
+			//memmove_mem_mem(payload, packet_buffer + length, count); Replaced by for loop
 	}
 }
 #endif
@@ -935,11 +934,11 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #ifndef ECLIPSE
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
 
-
+/*
     if(ipv4->mf_flag == 1){
         return PIF_PLUGIN_RETURN_DROP;
     }
-
+*/
     if(ipv4->fragOffset > 0 ){
         return PIF_PLUGIN_RETURN_DROP;
     }
@@ -1088,7 +1087,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
 	//sha256((uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - signatureTLVSize, (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
-    memset_mem((uint8_t *) (packet_buffer + result.signatureStartOffset + 7),0xab, SHA256_BLOCK_SIZE);
+
 #ifndef ECLIPSE
     length_inc = result.dataTLVSize - length;
     if(length_inc > 0) {
