@@ -1,4 +1,4 @@
-//#define ECLIPSE
+#define ECLIPSE
 
 #ifndef ECLIPSE
 #include <pif_plugin.h>
@@ -16,6 +16,7 @@
 #define __ctm
 #define __export
 #define __mem
+#define __forceinline
 #define __lmem
 #define PIF_PLUGIN_RETURN_DROP 1
 #define PIF_PLUGIN_RETURN_FORWARD 0
@@ -507,7 +508,7 @@ void AES_CBC_encrypt_buffer(__mem uint8_t* output, __mem uint8_t* input, uint32_
   KeyExpansion();
 
   Iv = (uint8_t*)iv;
-  
+
   for (i = 0; i < length; i += BLOCKLEN)
   {
     XorWithIv(input);
@@ -804,7 +805,7 @@ void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
 	// Compensate the offset for iv by adding BLOCKLEN
 	AES_CBC_encrypt_buffer(output + BLOCKLEN, input, length, key, iv);
 }
-
+#ifndef ECLIPSE
 void get_payload_and_packet_size (uint16_t* length, __ctm uint8_t* packet_buffer) {
     uint32_t count, mu_len;
 	__mem uint8_t* payload;
@@ -841,7 +842,9 @@ void get_payload_and_packet_size (uint16_t* length, __ctm uint8_t* packet_buffer
 			*length += count;
 	}
 }
+#endif
 
+#ifndef ECLIPSE
 void set_packet_size_and_payload(__ctm uint8_t* packet_buffer){
     uint32_t count, mu_len, length;
 	__mem uint8_t* payload;
@@ -873,6 +876,7 @@ void set_packet_size_and_payload(__ctm uint8_t* packet_buffer){
 			memmove_mem_mem(payload, packet_buffer + length, count);
 	}
 }
+#endif
 
 #ifndef ECLIPSE
 int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
@@ -905,7 +909,7 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 
 #ifndef ECLIPSE
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
-    
+
 
 /*
     if(ipv4->mf_flag == 1){
@@ -1065,12 +1069,12 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
     ipv4->totalLen += length_inc;
     udp = pif_plugin_hdr_get_udp(headers);
     udp->len += length_inc;
+    PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_UDP_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for UDP
+    PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_IPV4_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for IP
 #else
     print_buf(packet_buffer, sizeof(packet_buffer));
 #endif
-    PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_UDP_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for UDP
-    PIF_FLCALC_UPD_INCR_CLEAR(PIF_FLCALC_IPV4_CHECKSUM); // Reset calc_fld_bmask to 0 since this forces the use of non-incremental checksum calculation for IP
-    return PIF_PLUGIN_RETURN_FORWARD;
 
+    return PIF_PLUGIN_RETURN_FORWARD;
 
 }
