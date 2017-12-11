@@ -1,4 +1,4 @@
-#define ECLIPSE
+//#define ECLIPSE
 
 #ifndef ECLIPSE
 #include <pif_plugin.h>
@@ -594,12 +594,15 @@ void sha256_final(__mem SHA256_CTX *ctx, __mem BYTE hash[])
 	i = ctx->datalen;
 
 	// Pad whatever data is left in the buffer.
-    ctx->data[i++] = 0x80;
 	if (ctx->datalen < 56) {
-        memset_mem(ctx->data + i, 0x00, 56 -i);
+		ctx->data[i++] = 0x80;
+		while (i < 56)
+			ctx->data[i++] = 0x00;
 	}
 	else {
-        memset_mem(ctx->data + i, 0x00, 64 -i);
+		ctx->data[i++] = 0x80;
+		while (i < 64)
+			ctx->data[i++] = 0x00;
 		sha256_transform(ctx, ctx->data);
 		memset_mem(ctx->data, 0, 56);
 	}
@@ -800,12 +803,11 @@ void aes_encrypt(__mem uint8_t* output, __mem uint8_t* input, uint32_t length) {
         input[i + length] = 0x0;
     }
 
-    // input + length
     // Copy iv to the start of the output buffer
     for (i = 0; i < BLOCKLEN; i++) {
 	   output[i] = iv[i];
     }
-	//memmove_mem_mem(output, iv, BLOCKLEN); Replaced by for loop again
+
 	// Compensate the offset for iv by adding BLOCKLEN
 	AES_CBC_encrypt_buffer(output + BLOCKLEN, input, length, key, iv);
 }
@@ -883,21 +885,19 @@ void set_packet_size_and_payload(__ctm uint8_t* packet_buffer){
         payload[i] = packet_buffer[i];
     }
 
-	//memmove_mem_mem(payload, packet_buffer, count); Replaced by for loop
 
 	length = count; //prevent overwrite of beginning of buf
 
 	/* same as above, but for mu. Code duplicated as a manual unroll */
 	if (mu_len) {
-			payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
-			/* Adjust payload size depending on the ctm size for the packet */
-			payload += 256 << pif_pkt_info_global.ctm_size;
-			count = mu_len;
+		payload = (__addr40 void *)((uint64_t)pif_pkt_info_global.muptr << 11);
+		/* Adjust payload size depending on the ctm size for the packet */
+		payload += 256 << pif_pkt_info_global.ctm_size;
+		count = mu_len;
 
-            for (i = 0; i < count; i++) {
-               payload[i] = packet_buffer[length+i];
-            }
-			//memmove_mem_mem(payload, packet_buffer + length, count); Replaced by for loop
+        for (i = 0; i < count; i++) {
+           payload[i] = packet_buffer[length+i];
+        }
 	}
 }
 #endif
@@ -934,11 +934,11 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 #ifndef ECLIPSE
     ipv4 = pif_plugin_hdr_get_ipv4(headers);
 
-/*
+
     if(ipv4->mf_flag == 1){
         return PIF_PLUGIN_RETURN_DROP;
     }
-*/
+
     if(ipv4->fragOffset > 0 ){
         return PIF_PLUGIN_RETURN_DROP;
     }
@@ -1085,17 +1085,17 @@ int pif_plugin_payload_scan(EXTRACTED_HEADERS_T *headers,
 	packet_buffer[result.signatureStartOffset + 5] = 0x17;
 	packet_buffer[result.signatureStartOffset + 6] = 0x20;
 
-
-
 #ifdef ECLIPSE
 	print_buf_stream(packet_buffer + dataTLVValueStartOffset, result.dataSize - (signatureTLVSize - 5));
 #endif
+
 	// Apply SHA function on the Name, MetaInfo, EncryptedContentTLV
 	sha256((uint8_t *) (packet_buffer + dataTLVValueStartOffset), result.dataSize - (signatureTLVSize - 5), (BYTE*) &(packet_buffer[result.signatureStartOffset + 7]));
+
 #ifdef ECLIPSE
     print_buf_stream(packet_buffer + result.signatureStartOffset + 7, SHA256_BLOCK_SIZE);
 #endif
-	//memset_mem((uint8_t *) (packet_buffer + result.signatureStartOffset + 7),0xab, SHA256_BLOCK_SIZE);
+
 #ifndef ECLIPSE
     length_inc = result.dataTLVSize - length;
     if(length_inc > 0) {
