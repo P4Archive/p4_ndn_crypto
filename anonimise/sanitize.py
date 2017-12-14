@@ -143,14 +143,7 @@ class IPv4Generator(object):
     def get_ip(self, address):
         # check address mapping
         generic_addresses = ['255.255.255.255', '0.0.0.0']
-        if address not in generic_addresses:
-            try:
-                return self.mappings[address]
-            except KeyError:
-                self.mappings[address] = self._next_ip(address)
-                return self.mappings[address]
-        else:
-            return address
+        return self._next_ip(address)
 
 
 class IPv6Generator(object):
