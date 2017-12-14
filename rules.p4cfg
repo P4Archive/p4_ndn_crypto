@@ -9,17 +9,24 @@
             }
         }, 
         "tbl_forward_udp": {
-            "default_rule": {
-                "action": {
-                    "data": {
-                        "port": {
-                            "value": "v0.1"
-                        }
+            "rules": [
+                {
+                    "action": {
+                        "data": {
+                            "port": {
+                                "value": "p1"
+                            }
+                        }, 
+                        "type": "act_modify_and_send"
                     }, 
-                    "type": "act_modify_and_send"
-                }, 
-                "name": "modify_and_send"
-            }
+                    "name": "modify_and_send", 
+                    "match": {
+                        "standard_metadata.ingress_port": {
+                            "value": "p0"
+                        }
+                    }
+                }
+            ]
         }
     }
 }

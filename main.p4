@@ -146,6 +146,9 @@ action act_do_forward(espec) {
 }
 
 table tbl_forward_udp {
+  reads {
+    standard_metadata.ingress_port : exact;
+  }
   actions {
     act_modify_and_send;
   }
