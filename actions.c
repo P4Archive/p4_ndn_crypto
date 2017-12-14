@@ -124,7 +124,7 @@ static __export __ctm uint8_t packet_buffer[PAYLOAD_BUFFER_SIZE];
 static __export __ctm uint8_t encrypt_input_buffer[PAYLOAD_BUFFER_SIZE];
 static __export __ctm uint8_t encrypt_me_tlv_buffer[PAYLOAD_BUFFER_SIZE];
 
-static __export __shared __cls  uint8_t iv_counter[BLOCKLEN] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+static __export __shared __mem  uint8_t iv_counter[BLOCKLEN] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 //static __export __mem __shared  uint8_t  iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
 static __export __mem __shared 	uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
 
@@ -268,9 +268,9 @@ static  __export __shared __cls const WORD k[64] = {
 void inc_iv()
 {
 	int i;
-	for (i=0; i<BLOCKLEN; i++) {
+	for (i=1; i <= BLOCKLEN; i++) {
 		iv_counter[BLOCKLEN - i] ++;
-		if (iv_counter[BLOCKLEN -i] != 0) break;
+		if (iv_counter[BLOCKLEN - i] != 0) break;
 	}
 }
 
